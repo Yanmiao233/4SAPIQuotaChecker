@@ -8,7 +8,7 @@ WinUI 3 风格的 Windows 桌面程序：添加多个 API 密钥，自动查询�
 
 ## 下载 / 直接使用
 
-不想自行编译的话，到 [Releases](../../releases) 下载 `QuotaChecker-portable-win-x64.zip`，解压后双击 `QuotaChecker.exe` 即可。
+不想自行编译的话，到 [Releases](https://github.com/Yanmiao233/4SAPIQuotaChecker/releases) 下载 `QuotaChecker-portable-win-x64.zip`，解压后双击 `QuotaChecker.exe` 即可。
 
 该便携版为 **self-contained**：目标机器无需安装 .NET 运行时，也无需安装 Windows App SDK。
 
