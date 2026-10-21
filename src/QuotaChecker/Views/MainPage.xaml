@@ -1,0 +1,217 @@
+<?xml version="1.0" encoding="utf-8"?>
+<UserControl
+    x:Class="QuotaChecker.Views.MainPage"
+    xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+    xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+    xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+    xmlns:vm="using:QuotaChecker.ViewModels"
+    mc:Ignorable="d">
+
+    <Grid x:Name="RootGrid">
+        <Grid.RowDefinitions>
+            <RowDefinition Height="Auto" />
+            <RowDefinition Height="*" />
+            <RowDefinition Height="Auto" />
+        </Grid.RowDefinitions>
+
+        <!-- 自定义标题栏 -->
+        <Grid x:Name="TitleBarArea" Grid.Row="0" Height="48" Padding="16,0,16,0">
+            <StackPanel Orientation="Horizontal" VerticalAlignment="Center" Spacing="10">
+                <FontIcon Glyph="&#xE9D2;" FontSize="16" />
+                <TextBlock Text="配额统计 QuotaChecker" FontSize="13" VerticalAlignment="Center" />
+            </StackPanel>
+        </Grid>
+
+        <Grid Grid.Row="1" Padding="24,4,24,0" RowSpacing="16">
+            <Grid.RowDefinitions>
+                <RowDefinition Height="Auto" />
+                <RowDefinition Height="Auto" />
+                <RowDefinition Height="*" />
+            </Grid.RowDefinitions>
+
+            <!-- 汇总卡片 -->
+            <Grid Grid.Row="0" ColumnSpacing="12">
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="1.4*" />
+                    <ColumnDefinition Width="*" />
+                    <ColumnDefinition Width="*" />
+                    <ColumnDefinition Width="1.1*" />
+                </Grid.ColumnDefinitions>
+
+                <Border Grid.Column="0" Style="{StaticResource CardBorderStyle}">
+                    <StackPanel Spacing="6">
+                        <TextBlock Text="累计消耗（人民币）" Style="{ThemeResource CaptionTextBlockStyle}"
+                                   Foreground="{ThemeResource TextFillColorSecondaryBrush}" />
+                        <TextBlock Text="{x:Bind Vm.TotalCnyText, Mode=OneWay}" FontSize="34" FontWeight="SemiBold" />
+                        <TextBlock Text="{x:Bind Vm.TotalCnyCaption, Mode=OneWay}" Style="{ThemeResource CaptionTextBlockStyle}"
+                                   Foreground="{ThemeResource TextFillColorSecondaryBrush}" />
+                        <TextBlock Text="{x:Bind Vm.TotalQuotaText, Mode=OneWay}" Style="{ThemeResource CaptionTextBlockStyle}"
+                                   Foreground="{ThemeResource TextFillColorSecondaryBrush}" />
+                    </StackPanel>
+                </Border>
+
+                <Border Grid.Column="1" Style="{StaticResource CardBorderStyle}">
+                    <StackPanel Spacing="6">
+                        <TextBlock Text="剩余额度" Style="{ThemeResource CaptionTextBlockStyle}"
+                                   Foreground="{ThemeResource TextFillColorSecondaryBrush}" />
+                        <TextBlock Text="{x:Bind Vm.TotalRemainingText, Mode=OneWay}" FontSize="24" FontWeight="SemiBold" />
+                        <TextBlock Text="{x:Bind Vm.TotalRemainingCaption, Mode=OneWay}" Style="{ThemeResource CaptionTextBlockStyle}"
+                                   Foreground="{ThemeResource TextFillColorSecondaryBrush}" TextWrapping="Wrap" />
+                    </StackPanel>
+                </Border>
+
+                <Border Grid.Column="2" Style="{StaticResource CardBorderStyle}">
+                    <StackPanel Spacing="6">
+                        <TextBlock Text="总额度" Style="{ThemeResource CaptionTextBlockStyle}"
+                                   Foreground="{ThemeResource TextFillColorSecondaryBrush}" />
+                        <TextBlock Text="{x:Bind Vm.TotalGrantedText, Mode=OneWay}" FontSize="24" FontWeight="SemiBold" />
+                        <TextBlock Text="{x:Bind Vm.TotalGrantedCaption, Mode=OneWay}" Style="{ThemeResource CaptionTextBlockStyle}"
+                                   Foreground="{ThemeResource TextFillColorSecondaryBrush}" TextWrapping="Wrap" />
+                    </StackPanel>
+                </Border>
+
+                <Border Grid.Column="3" Style="{StaticResource CardBorderStyle}">
+                    <StackPanel Spacing="6">
+                        <TextBlock Text="站点倍率（官方 1 美元 = ？元）" Style="{ThemeResource CaptionTextBlockStyle}"
+                                   Foreground="{ThemeResource TextFillColorSecondaryBrush}" TextWrapping="Wrap" />
+                        <NumberBox Value="{x:Bind Vm.RateCnyPerUsd, Mode=TwoWay}" SpinButtonPlacementMode="Compact"
+                                   SmallChange="0.1" LargeChange="1" Minimum="0.0001" HorizontalAlignment="Stretch"
+                                   ValueChanged="OnRateChanged" />
+                        <TextBlock Text="{x:Bind Vm.KeyCountText, Mode=OneWay}" Style="{ThemeResource CaptionTextBlockStyle}"
+                                   Foreground="{ThemeResource TextFillColorSecondaryBrush}" TextWrapping="Wrap" />
+                    </StackPanel>
+                </Border>
+            </Grid>
+
+            <!-- 工具栏 -->
+            <StackPanel Grid.Row="1" Orientation="Horizontal" Spacing="8">
+                <Button Command="{x:Bind Vm.RefreshAllCommand}">
+                    <StackPanel Orientation="Horizontal" Spacing="8">
+                        <FontIcon Glyph="&#xE72C;" FontSize="14" />
+                        <TextBlock Text="刷新全部" />
+                    </StackPanel>
+                </Button>
+                <Button Click="OnAddKeyClick" Style="{ThemeResource AccentButtonStyle}">
+                    <StackPanel Orientation="Horizontal" Spacing="8">
+                        <FontIcon Glyph="&#xE710;" FontSize="14" />
+                        <TextBlock Text="添加密钥" />
+                    </StackPanel>
+                </Button>
+                <ProgressRing IsActive="{x:Bind Vm.IsBusy, Mode=OneWay}" Width="20" Height="20" VerticalAlignment="Center" />
+            </StackPanel>
+
+            <!-- 密钥列表 -->
+            <Grid Grid.Row="2">
+                <ListView ItemsSource="{x:Bind Vm.Keys, Mode=OneWay}" SelectionMode="None" Padding="0,0,0,12"
+                          Visibility="{x:Bind Vm.Keys.Count, Mode=OneWay, Converter={StaticResource CountToVisibility}}">
+                    <ListView.ItemContainerStyle>
+                        <Style TargetType="ListViewItem">
+                            <Setter Property="HorizontalContentAlignment" Value="Stretch" />
+                            <Setter Property="Padding" Value="0" />
+                            <Setter Property="Margin" Value="0,0,0,8" />
+                            <Setter Property="MinHeight" Value="0" />
+                        </Style>
+                    </ListView.ItemContainerStyle>
+                    <ListView.ItemTemplate>
+                        <DataTemplate x:DataType="vm:ApiKeyViewModel">
+                            <Border Style="{StaticResource CardBorderStyle}">
+                                <Grid ColumnSpacing="16">
+                                    <Grid.ColumnDefinitions>
+                                        <ColumnDefinition Width="Auto" />
+                                        <ColumnDefinition Width="*" />
+                                        <ColumnDefinition Width="Auto" />
+                                        <ColumnDefinition Width="Auto" />
+                                        <ColumnDefinition Width="Auto" />
+                                    </Grid.ColumnDefinitions>
+
+                                    <CheckBox Grid.Column="0" IsChecked="{x:Bind IsEnabled, Mode=TwoWay}" VerticalAlignment="Center"
+                                              MinWidth="0" ToolTipService.ToolTip="是否计入总计" />
+
+                                    <StackPanel Grid.Column="1" Spacing="6" VerticalAlignment="Center">
+                                        <StackPanel Orientation="Horizontal" Spacing="8">
+                                            <TextBlock Text="{x:Bind Name}" FontWeight="SemiBold" TextTrimming="CharacterEllipsis" />
+                                            <Border Background="{ThemeResource SystemFillColorSuccessBackgroundBrush}"
+                                                    CornerRadius="4" Padding="6,2" VerticalAlignment="Center">
+                                                <TextBlock Text="{x:Bind CredentialState, Mode=OneWay}" FontSize="11" />
+                                            </Border>
+                                        </StackPanel>
+                                        <TextBlock Text="{x:Bind DetailText}" Style="{ThemeResource CaptionTextBlockStyle}"
+                                                   Foreground="{ThemeResource TextFillColorSecondaryBrush}"
+                                                   TextTrimming="CharacterEllipsis" />
+                                        <ProgressBar Value="{x:Bind ProgressValue, Mode=OneWay}" Maximum="100" Width="320"
+                                                     HorizontalAlignment="Left" />
+                                        <TextBlock Text="{x:Bind ProgressText, Mode=OneWay}" Style="{ThemeResource CaptionTextBlockStyle}"
+                                                   Foreground="{ThemeResource TextFillColorSecondaryBrush}" />
+                                        <TextBlock Text="{x:Bind ErrorMessage, Mode=OneWay}"
+                                                   Foreground="{ThemeResource SystemFillColorCriticalBrush}"
+                                                   TextWrapping="Wrap" FontSize="12"
+                                                   Visibility="{x:Bind ErrorMessage, Mode=OneWay, Converter={StaticResource StringToVisibility}}" />
+                                    </StackPanel>
+
+                                    <StackPanel Grid.Column="2" Spacing="2" VerticalAlignment="Center" MinWidth="140">
+                                        <TextBlock Text="已消耗" Style="{ThemeResource CaptionTextBlockStyle}"
+                                                   Foreground="{ThemeResource TextFillColorSecondaryBrush}" />
+                                        <TextBlock Text="{x:Bind UsedCnyText, Mode=OneWay}" FontSize="20" FontWeight="SemiBold" />
+                                        <TextBlock Text="{x:Bind UsedQuotaText, Mode=OneWay}" Style="{ThemeResource CaptionTextBlockStyle}"
+                                                   Foreground="{ThemeResource TextFillColorSecondaryBrush}" />
+                                    </StackPanel>
+
+                                    <StackPanel Grid.Column="3" Spacing="2" VerticalAlignment="Center" MinWidth="150">
+                                        <TextBlock Text="剩余 / 总额度" Style="{ThemeResource CaptionTextBlockStyle}"
+                                                   Foreground="{ThemeResource TextFillColorSecondaryBrush}" />
+                                        <TextBlock Text="{x:Bind RemainingCnyText, Mode=OneWay}" FontSize="20" FontWeight="SemiBold" />
+                                        <TextBlock Text="{x:Bind RemainingQuotaText, Mode=OneWay}" Style="{ThemeResource CaptionTextBlockStyle}"
+                                                   Foreground="{ThemeResource TextFillColorSecondaryBrush}" />
+                                        <TextBlock Text="{x:Bind ExpiresText, Mode=OneWay}" Style="{ThemeResource CaptionTextBlockStyle}"
+                                                   Foreground="{ThemeResource TextFillColorSecondaryBrush}" />
+                                    </StackPanel>
+
+                                    <StackPanel Grid.Column="4" Orientation="Horizontal" Spacing="4" VerticalAlignment="Center">
+                                        <ProgressRing IsActive="{x:Bind IsLoading, Mode=OneWay}" Width="18" Height="18" />
+                                        <Button Command="{x:Bind RefreshCommand}" ToolTipService.ToolTip="刷新本密钥额度">
+                                            <FontIcon Glyph="&#xE72C;" FontSize="14" />
+                                        </Button>
+                                        <Button Command="{x:Bind DeleteCommand}" ToolTipService.ToolTip="删除">
+                                            <FontIcon Glyph="&#xE74D;" FontSize="14" />
+                                        </Button>
+                                    </StackPanel>
+                                </Grid>
+                            </Border>
+                        </DataTemplate>
+                    </ListView.ItemTemplate>
+                </ListView>
+
+                <!-- 空状态 -->
+                <StackPanel VerticalAlignment="Center" HorizontalAlignment="Center" Spacing="12"
+                            Visibility="{x:Bind Vm.Keys.Count, Mode=OneWay, Converter={StaticResource CountToVisibility}, ConverterParameter=Invert}">
+                    <FontIcon Glyph="&#xE8D7;" FontSize="40" Foreground="{ThemeResource TextFillColorSecondaryBrush}" />
+                    <TextBlock Text="还没有添加任何密钥" HorizontalAlignment="Center" FontSize="16" />
+                    <TextBlock Text="点击「添加密钥」填入 4sapi（或兼容 new-api）的 API Key，程序会自动查询额度并换算成人民币。"
+                               HorizontalAlignment="Center" TextAlignment="Center" MaxWidth="420"
+                               Foreground="{ThemeResource TextFillColorSecondaryBrush}" TextWrapping="Wrap" />
+                    <Button Content="添加密钥" HorizontalAlignment="Center" Style="{ThemeResource AccentButtonStyle}"
+                            Click="OnAddKeyClick" />
+                </StackPanel>
+            </Grid>
+        </Grid>
+
+        <!-- 状态栏 -->
+        <Border Grid.Row="2" Padding="24,8" BorderThickness="0,1,0,0"
+                BorderBrush="{ThemeResource DividerStrokeColorDefaultBrush}"
+                Background="{ThemeResource LayerFillColorDefaultBrush}">
+            <Grid ColumnSpacing="12">
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="*" />
+                    <ColumnDefinition Width="Auto" />
+                </Grid.ColumnDefinitions>
+                <TextBlock Grid.Column="0" Text="{x:Bind Vm.StatusMessage, Mode=OneWay}" VerticalAlignment="Center"
+                           TextTrimming="CharacterEllipsis" Style="{ThemeResource CaptionTextBlockStyle}" />
+                <TextBlock Grid.Column="1" Text="{x:Bind Vm.DataFilePath}" VerticalAlignment="Center"
+                           Foreground="{ThemeResource TextFillColorSecondaryBrush}"
+                           Style="{ThemeResource CaptionTextBlockStyle}" TextTrimming="CharacterEllipsis"
+                           ToolTipService.ToolTip="密钥数据保存位置（DPAPI 加密）" />
+            </Grid>
+        </Border>
+    </Grid>
+</UserControl>

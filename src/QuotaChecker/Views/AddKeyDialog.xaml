@@ -1,0 +1,28 @@
+<?xml version="1.0" encoding="utf-8"?>
+<ContentDialog
+    x:Class="QuotaChecker.Views.AddKeyDialog"
+    xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+    xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+    xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+    mc:Ignorable="d"
+    Title="添加密钥"
+    PrimaryButtonText="添加并查询"
+    CloseButtonText="取消"
+    DefaultButton="Primary"
+    PrimaryButtonClick="OnPrimaryButtonClick">
+
+    <StackPanel Spacing="14" Width="420">
+        <TextBox x:Name="NameBox" Header="名称（可选）" PlaceholderText="例如：主账号 / 测试密钥" />
+
+        <TextBox x:Name="BaseUrlBox" Header="接口地址" Text="https://4sapi.com"
+                 PlaceholderText="https://4sapi.com" />
+
+        <PasswordBox x:Name="ApiKeyBox" Header="API Key" PlaceholderText="sk-..." PasswordRevealMode="Peek" />
+
+        <TextBlock TextWrapping="Wrap" FontSize="12" Foreground="{ThemeResource TextFillColorSecondaryBrush}"
+                   Text="程序会请求「接口地址 + /api/usage/token」查询该密钥的配额，并按「配额 ÷ 500000 × 站点倍率」换算成人民币。密钥使用 Windows DPAPI 加密后仅保存在本机，不会上传。" />
+
+        <InfoBar x:Name="ErrorBar" IsOpen="False" Severity="Error" IsClosable="False" />
+    </StackPanel>
+</ContentDialog>
