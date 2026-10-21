@@ -22,7 +22,7 @@ public sealed class StoredKey
 /// <summary>换算参数：配额 → 美元 → 人民币。</summary>
 public sealed class AppSettings
 {
-    public const string DefaultBaseUrl = "https://4sapi.com";
+    public const string DefaultBaseUrl = "https://4sapi.org";
 
     /// <summary>new-api 的配额基数：500000 配额 = 官方计价 1 美元。</summary>
     public const double DefaultQuotaPerUsd = 500_000d;
@@ -32,6 +32,9 @@ public sealed class AppSettings
 
     /// <summary>多少配额折算为 1 美元（官方价格）。</summary>
     public static double QuotaPerUsd { get; set; } = DefaultQuotaPerUsd;
+
+    /// <summary>自动刷新间隔（秒）；0 表示关闭。</summary>
+    public static int AutoRefreshSeconds { get; set; }
 }
 
 /// <summary>本地数据文件结构。</summary>
@@ -42,6 +45,9 @@ public sealed class AppDataFile
     public double RateCnyPerUsd { get; set; } = 1d;
 
     public double QuotaPerUsd { get; set; } = AppSettings.DefaultQuotaPerUsd;
+
+    /// <summary>自动刷新间隔（秒）；0 表示关闭。</summary>
+    public int AutoRefreshSeconds { get; set; }
 
     public List<StoredKey> Keys { get; set; } = new();
 

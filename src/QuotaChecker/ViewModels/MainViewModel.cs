@@ -3,6 +3,7 @@ using System.ComponentModel;
 using System.Globalization;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
+using Microsoft.UI.Dispatching;
 using QuotaChecker.Converters;
 using QuotaChecker.Models;
 using QuotaChecker.Services;
@@ -15,6 +16,7 @@ public sealed partial class MainViewModel : ObservableObject
     private readonly KeyStore _store;
     private readonly QuotaClient _client;
     private bool _isUpdatingDerived;
+    private DispatcherQueueTimer? _autoRefreshTimer;
 
     public MainViewModel(KeyStore store, QuotaClient client)
     {
@@ -30,6 +32,10 @@ public sealed partial class MainViewModel : ObservableObject
     /// <summary>站点倍率：官方计价 1 美元对应多少人民币。</summary>
     [ObservableProperty]
     private double _rateCnyPerUsd = 1d;
+
+    /// <summary>自动刷新间隔（秒）；0 表示关闭。</summary>
+    [ObservableProperty]
+    private int _autoRefreshSeconds;
 
     [ObservableProperty]
     private string _statusMessage = string.Empty;
@@ -68,7 +74,9 @@ public sealed partial class MainViewModel : ObservableObject
 
         AppSettings.RateCnyPerUsd = data.RateCnyPerUsd > 0 ? data.RateCnyPerUsd : 1d;
         AppSettings.QuotaPerUsd = data.QuotaPerUsd > 0 ? data.QuotaPerUsd : AppSettings.DefaultQuotaPerUsd;
+        AppSettings.AutoRefreshSeconds = Math.Max(0, data.AutoRefreshSeconds);
         RateCnyPerUsd = AppSettings.RateCnyPerUsd;
+        AutoRefreshSeconds = AppSettings.AutoRefreshSeconds;
 
         Keys.Clear();
         foreach (var key in data.Keys)
@@ -83,13 +91,15 @@ public sealed partial class MainViewModel : ObservableObject
         UpdateDerived();
     }
 
-    /// <summary>启动后自动查询所有启用的密钥。</summary>
-    public void StartAutoRefresh()
+    /// <summary>启动时先查一次，随后按设置的间隔开启自动刷新。</summary>
+    public void StartBackgroundRefresh()
     {
         if (Keys.Any(k => k.IsEnabled))
         {
             _ = RefreshAllAsync();
         }
+
+        StartAutoRefreshTimer();
     }
 
     /// <summary>添加一个密钥并立即查询额度。</summary>
@@ -170,12 +180,78 @@ public sealed partial class MainViewModel : ObservableObject
         }
     }
 
+    /// <summary>套用自动刷新间隔（秒，0 = 关闭）并重启定时器。</summary>
+    public void ApplyAutoRefreshSeconds(int seconds)
+    {
+        AutoRefreshSeconds = Math.Max(0, seconds);
+        AppSettings.AutoRefreshSeconds = AutoRefreshSeconds;
+        Persist();
+        StartAutoRefreshTimer();
+
+        StatusMessage = AutoRefreshSeconds <= 0
+            ? "已关闭自动刷新。"
+            : $"已开启自动刷新：每 {FormatInterval(AutoRefreshSeconds)}刷新一次。";
+    }
+
+    /// <summary>按当前间隔启动（或停止）自动刷新定时器。必须在 UI 线程调用。</summary>
+    public void StartAutoRefreshTimer()
+    {
+        var queue = DispatcherQueue.GetForCurrentThread();
+        if (queue is null)
+        {
+            return;
+        }
+
+        _autoRefreshTimer ??= queue.CreateTimer();
+        _autoRefreshTimer.Stop();
+        _autoRefreshTimer.Tick -= OnAutoRefreshTick;
+
+        if (AutoRefreshSeconds <= 0)
+        {
+            return;
+        }
+
+        _autoRefreshTimer.Interval = TimeSpan.FromSeconds(AutoRefreshSeconds);
+        _autoRefreshTimer.IsRepeating = true;
+        _autoRefreshTimer.Tick += OnAutoRefreshTick;
+        _autoRefreshTimer.Start();
+    }
+
+    private async void OnAutoRefreshTick(DispatcherQueueTimer sender, object args)
+    {
+        // 定时器回调里抛出的异常会直接终止进程，必须全部兜住。
+        try
+        {
+            if (IsBusy || !Keys.Any(k => k.IsEnabled))
+            {
+                return;
+            }
+
+            await RefreshAllAsync().ConfigureAwait(true);
+            StatusMessage = $"自动刷新完成（{DateTime.Now:HH:mm:ss}），下次 {FormatInterval(AutoRefreshSeconds)}后。";
+        }
+        catch (Exception ex)
+        {
+            StatusMessage = "自动刷新出错：" + ex.Message;
+        }
+    }
+
+    /// <summary>把秒数说成人话，例如 60 -> "1 分钟"。</summary>
+    public static string FormatInterval(int seconds) => seconds switch
+    {
+        <= 0 => "关闭",
+        < 60 => $"{seconds} 秒",
+        _ when seconds % 60 == 0 => $"{seconds / 60} 分钟",
+        _ => $"{seconds / 60} 分 {seconds % 60} 秒",
+    };
+
     public void Persist()
     {
         var data = new AppDataFile
         {
             RateCnyPerUsd = AppSettings.RateCnyPerUsd,
             QuotaPerUsd = AppSettings.QuotaPerUsd,
+            AutoRefreshSeconds = AppSettings.AutoRefreshSeconds,
             Keys = Keys.Select(k => k.ToStoredKey()).ToList(),
         };
 

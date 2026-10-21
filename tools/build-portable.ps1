@@ -13,7 +13,9 @@ param(
     [ValidateSet('x64', 'ARM64')][string]$Platform = 'x64',
     [string]$OutputDir = '',
     [switch]$NoTrim,
-    [switch]$KeepAllLocales
+    [switch]$KeepAllLocales,
+    # 留空则自动读取 csproj 里的 <Version>
+    [string]$Version = ''
 )
 
 $ErrorActionPreference = 'Stop'
@@ -23,9 +25,21 @@ if ([string]::IsNullOrWhiteSpace($OutputDir)) { $OutputDir = Join-Path $repoRoot
 $project = Join-Path $repoRoot 'src\QuotaChecker\QuotaChecker.csproj'
 $packaging = Join-Path $repoRoot 'packaging'
 $rid = if ($Platform -eq 'ARM64') { 'win-arm64' } else { 'win-x64' }
+
+# 解压后的目录名保持稳定：方便覆盖升级，也不会让已存在的快捷方式失效
 $packageName = "QuotaChecker-portable-$rid"
 
-Write-Host "==> 发布 $rid (Trim=$(-not $NoTrim))" -ForegroundColor Cyan
+# 版本号取 csproj 的 <Version>，让压缩包名带上版本，下载多个版本时才分得清
+if ([string]::IsNullOrWhiteSpace($Version)) {
+    $Version = (& dotnet msbuild $project -getProperty:Version -nologo 2>$null | Select-Object -Last 1)
+    $Version = if ($null -eq $Version) { '' } else { $Version.Trim() }
+}
+if ([string]::IsNullOrWhiteSpace($Version)) {
+    throw '无法从 csproj 读取 <Version>，请用 -Version 显式指定。'
+}
+$zipName = "$packageName-v$Version"
+
+Write-Host "==> 发布 $rid  v$Version  (Trim=$(-not $NoTrim))" -ForegroundColor Cyan
 
 $staging = Join-Path $env:TEMP "qcportable-$rid"
 if (Test-Path $staging) { Remove-Item $staging -Recurse -Force }
@@ -94,7 +108,7 @@ $sizeMb = [math]::Round(((Get-ChildItem $rootDir -Recurse -File | Measure-Object
 $fileCount = (Get-ChildItem $rootDir -Recurse -File | Measure-Object).Count
 
 New-Item -ItemType Directory -Force $OutputDir | Out-Null
-$zipPath = Join-Path $OutputDir "$packageName.zip"
+$zipPath = Join-Path $OutputDir "$zipName.zip"
 if (Test-Path $zipPath) { Remove-Item $zipPath -Force }
 
 Write-Host "==> 压缩（$sizeMb MB / $fileCount 文件）…" -ForegroundColor Cyan
@@ -109,6 +123,7 @@ Remove-Item $staging -Recurse -Force
 
 Write-Host ""
 Write-Host "完成" -ForegroundColor Green
+Write-Host "  版本     : v$Version"
 Write-Host "  包内大小 : $sizeMb MB ($fileCount 个文件)"
 Write-Host "  压缩包   : $zipPath"
 Write-Host "  压缩后   : $zipMb MB"

@@ -9,7 +9,7 @@ WinUI 3 风格的 Windows 桌面程序：添加多个 API 密钥，自动查询�
 ## 下载 / 直接使用
 
 不想自行编译的话，到 [Releases](https://github.com/Yanmiao233/4SAPIQuotaChecker/releases) 下载
-`QuotaChecker-portable-win-x64.zip`（约 31 MB），解压后双击根目录的
+`QuotaChecker-portable-win-x64-v<版本>.zip`（约 31 MB），解压后双击根目录的
 `启动 QuotaChecker.cmd` 即可。
 
 解压后根目录只有 3 项，程序文件都收在 `app\` 子目录里：
@@ -28,6 +28,7 @@ QuotaChecker-portable-win-x64\
 
 - **添加多个密钥**：每个密钥可单独命名、指定接口地址，添加后立即自动查询
 - **自动查询 quota**：启动时自动刷新全部启用的密钥，也可手动「刷新全部」或单独刷新某个密钥
+- **定时自动刷新**：可在「设置」里选择 1 / 5 / 15 / 30 / 60 分钟，默认关闭
 - **换算人民币**：`配额 ÷ 500000 × 站点倍率`，界面同步显示配额原值、官方美元价与人民币金额
 - **总计消耗金额**：顶部卡片实时汇总所有启用密钥的累计消耗、剩余额度与总额度
 - **无限额度 / 过期时间**：正确识别 `unlimited_quota`，无限额度密钥不计入总额度统计
@@ -45,6 +46,18 @@ QuotaChecker-portable-win-x64\
 | 备注 | 4sapi 基础汇率固定 1 美元 = 1 人民币；若站点倍率不同（如 6 倍率）直接改界面上的倍率即可 |
 
 示例：`1,250,000 配额` → `$2.5 官方计价` → 1 倍率下 `¥2.5000`
+
+## 设置（二级菜单）
+
+工具栏上的齿轮按钮打开设置弹层，里面只有两项：
+
+| 项目 | 说明 |
+| --- | --- |
+| 站点倍率 | 默认 `1`。按你的分组填写，改完立即重算所有金额并保存 |
+| 自动刷新间隔 | 默认「关闭」。可选 1 / 5 / 15 / 30 / 60 分钟 |
+
+这两项都会写进 `keys.json`。倍率不再占用首屏卡片位置，
+自动刷新关闭时程序只在启动、手动刷新、添加密钥时查询。
 
 ## 接口
 
@@ -70,7 +83,7 @@ Authorization: Bearer sk-xxxxxxxx
 }
 ```
 
-站点地址可以只填域名（如 `https://4sapi.com`），程序会自动补全 `/api/usage/token/`。
+站点地址可以只填域名（如 `https://4sapi.org`），程序会自动补全 `/api/usage/token/`。
 
 ### 尾斜杠很重要（曾经的 401 坑）
 
@@ -139,9 +152,11 @@ powershell -ExecutionPolicy Bypass -File tools\build-portable.ps1
 # -Platform ARM64    出 ARM64 包
 # -NoTrim            关闭裁剪（排错用，体积翻倍）
 # -KeepAllLocales    保留全部语言资源
+# -Version 1.2.0     覆盖版本号（默认读 csproj 的 <Version>）
 ```
 
-产物在 `dist\QuotaChecker-portable-win-x64.zip`。
+产物在 `dist\QuotaChecker-portable-win-x64-v<版本>.zip`，压缩包名自动带上版本；
+解压后的目录名保持 `QuotaChecker-portable-win-x64` 不变，方便覆盖升级。
 
 程序为 **unpackaged + self-contained**：不需要安装 MSIX，也不需要目标机器预装 .NET 运行时或 Windows App SDK。
 

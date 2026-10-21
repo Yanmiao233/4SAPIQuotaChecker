@@ -15,8 +15,8 @@
     <StackPanel Spacing="14" Width="420">
         <TextBox x:Name="NameBox" Header="名称（可选）" PlaceholderText="例如：主账号 / 测试密钥" />
 
-        <TextBox x:Name="BaseUrlBox" Header="接口地址" Text="https://4sapi.com"
-                 PlaceholderText="https://4sapi.com" />
+        <TextBox x:Name="BaseUrlBox" Header="接口地址" Text="https://4sapi.org"
+                 PlaceholderText="https://4sapi.org" />
 
         <PasswordBox x:Name="ApiKeyBox" Header="API Key" PlaceholderText="sk-..." PasswordRevealMode="Peek" />
 

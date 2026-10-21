@@ -33,10 +33,9 @@
             <!-- 汇总卡片 -->
             <Grid Grid.Row="0" ColumnSpacing="12">
                 <Grid.ColumnDefinitions>
-                    <ColumnDefinition Width="1.4*" />
+                    <ColumnDefinition Width="1.3*" />
                     <ColumnDefinition Width="*" />
                     <ColumnDefinition Width="*" />
-                    <ColumnDefinition Width="1.1*" />
                 </Grid.ColumnDefinitions>
 
                 <Border Grid.Column="0" Style="{StaticResource CardBorderStyle}">
@@ -70,36 +69,71 @@
                                    Foreground="{ThemeResource TextFillColorSecondaryBrush}" TextWrapping="Wrap" />
                     </StackPanel>
                 </Border>
-
-                <Border Grid.Column="3" Style="{StaticResource CardBorderStyle}">
-                    <StackPanel Spacing="6">
-                        <TextBlock Text="站点倍率（官方 1 美元 = ？元）" Style="{ThemeResource CaptionTextBlockStyle}"
-                                   Foreground="{ThemeResource TextFillColorSecondaryBrush}" TextWrapping="Wrap" />
-                        <NumberBox Value="{x:Bind Vm.RateCnyPerUsd, Mode=TwoWay}" SpinButtonPlacementMode="Compact"
-                                   SmallChange="0.1" LargeChange="1" Minimum="0.0001" HorizontalAlignment="Stretch"
-                                   ValueChanged="OnRateChanged" />
-                        <TextBlock Text="{x:Bind Vm.KeyCountText, Mode=OneWay}" Style="{ThemeResource CaptionTextBlockStyle}"
-                                   Foreground="{ThemeResource TextFillColorSecondaryBrush}" TextWrapping="Wrap" />
-                    </StackPanel>
-                </Border>
             </Grid>
 
             <!-- 工具栏 -->
-            <StackPanel Grid.Row="1" Orientation="Horizontal" Spacing="8">
-                <Button Command="{x:Bind Vm.RefreshAllCommand}" AutomationProperties.Name="刷新全部">
-                    <StackPanel Orientation="Horizontal" Spacing="8">
-                        <FontIcon Glyph="&#xE72C;" FontSize="14" />
-                        <TextBlock Text="刷新全部" />
-                    </StackPanel>
-                </Button>
-                <Button Click="OnAddKeyClick" Style="{ThemeResource AccentButtonStyle}" AutomationProperties.Name="添加密钥">
-                    <StackPanel Orientation="Horizontal" Spacing="8">
-                        <FontIcon Glyph="&#xE710;" FontSize="14" />
-                        <TextBlock Text="添加密钥" />
-                    </StackPanel>
-                </Button>
-                <ProgressRing IsActive="{x:Bind Vm.IsBusy, Mode=OneWay}" Width="20" Height="20" VerticalAlignment="Center" />
-            </StackPanel>
+            <Grid Grid.Row="1" ColumnSpacing="8">
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="Auto" />
+                    <ColumnDefinition Width="*" />
+                </Grid.ColumnDefinitions>
+
+                <StackPanel Grid.Column="0" Orientation="Horizontal" Spacing="8">
+                    <Button Command="{x:Bind Vm.RefreshAllCommand}" AutomationProperties.Name="刷新全部">
+                        <StackPanel Orientation="Horizontal" Spacing="8">
+                            <FontIcon Glyph="&#xE72C;" FontSize="14" />
+                            <TextBlock Text="刷新全部" />
+                        </StackPanel>
+                    </Button>
+                    <Button Click="OnAddKeyClick" Style="{ThemeResource AccentButtonStyle}" AutomationProperties.Name="添加密钥">
+                        <StackPanel Orientation="Horizontal" Spacing="8">
+                            <FontIcon Glyph="&#xE710;" FontSize="14" />
+                            <TextBlock Text="添加密钥" />
+                        </StackPanel>
+                    </Button>
+
+                    <!-- 二级菜单：设置（站点倍率 / 自动刷新间隔） -->
+                    <Button AutomationProperties.Name="设置" ToolTipService.ToolTip="设置">
+                        <Button.Flyout>
+                            <Flyout Placement="BottomEdgeAlignedLeft">
+                                <StackPanel Width="340" Spacing="16">
+                                    <TextBlock Text="设置" Style="{ThemeResource SubtitleTextBlockStyle}" />
+
+                                    <NumberBox Header="站点倍率（官方 1 美元 = ？元）"
+                                               Value="{x:Bind Vm.RateCnyPerUsd, Mode=TwoWay}"
+                                               SpinButtonPlacementMode="Compact"
+                                               SmallChange="0.1" LargeChange="1" Minimum="0.0001"
+                                               HorizontalAlignment="Stretch"
+                                               ValueChanged="OnRateChanged" />
+
+                                    <ComboBox x:Name="AutoRefreshBox" Header="自动刷新间隔"
+                                              HorizontalAlignment="Stretch"
+                                              SelectionChanged="OnAutoRefreshChanged">
+                                        <ComboBoxItem Content="关闭" Tag="0" />
+                                        <ComboBoxItem Content="1 分钟" Tag="60" />
+                                        <ComboBoxItem Content="5 分钟" Tag="300" />
+                                        <ComboBoxItem Content="15 分钟" Tag="900" />
+                                        <ComboBoxItem Content="30 分钟" Tag="1800" />
+                                        <ComboBoxItem Content="60 分钟" Tag="3600" />
+                                    </ComboBox>
+
+                                    <TextBlock TextWrapping="Wrap" FontSize="12"
+                                               Foreground="{ThemeResource TextFillColorSecondaryBrush}"
+                                               Text="人民币 = 配额 ÷ 500000 × 站点倍率。倍率按你的分组填写，默认 1 表示官方 1 美元 = 1 元。" />
+                                </StackPanel>
+                            </Flyout>
+                        </Button.Flyout>
+                        <FontIcon Glyph="&#xE713;" FontSize="14" />
+                    </Button>
+
+                    <ProgressRing IsActive="{x:Bind Vm.IsBusy, Mode=OneWay}" Width="20" Height="20" VerticalAlignment="Center" />
+                </StackPanel>
+
+                <TextBlock Grid.Column="1" Text="{x:Bind Vm.KeyCountText, Mode=OneWay}"
+                           HorizontalAlignment="Right" VerticalAlignment="Center"
+                           Style="{ThemeResource CaptionTextBlockStyle}"
+                           Foreground="{ThemeResource TextFillColorSecondaryBrush}" />
+            </Grid>
 
             <!-- 密钥列表 -->
             <Grid Grid.Row="2">

@@ -39,7 +39,7 @@ public partial class App : Application
         _window = new MainWindow();
         _window.Activate();
 
-        ViewModel.StartAutoRefresh();
+        ViewModel.StartBackgroundRefresh();
     }
 
     private static void WriteCrashLog(string source, Exception? exception)
