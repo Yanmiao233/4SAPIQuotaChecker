@@ -1,58 +1,110 @@
+using System.Net;
 using System.Net.Http;
-using System.Net.Http.Headers;
 using QuotaChecker.Models;
 
 namespace QuotaChecker.Services;
 
 /// <summary>
-/// 调用中转站的 <c>GET /api/usage/token</c> 查询密钥（令牌）用量。
+/// 调用中转站的 <c>GET /api/usage/token/</c> 查询密钥（令牌）用量。
 /// </summary>
 public sealed class QuotaClient
 {
+    /// <summary>
+    /// new-api 的路由注册为 <c>usageRoute.Group("/token").GET("/")</c>，即带尾斜杠的
+    /// <c>/api/usage/token/</c>。请求不带尾斜杠时 Gin 会 301 重定向，而重定向会丢掉
+    /// Authorization 头，服务端于是返回 401 "Token not provided"。
+    /// 这里统一补上尾斜杠，从根上避免这次重定向。
+    /// </summary>
+    private const string BareEndpoint = "/api/usage/token";
+
+    private const int MaxRedirects = 5;
+
     private readonly HttpClient _http;
 
     public QuotaClient(HttpClient? http = null)
     {
-        _http = http ?? new HttpClient { Timeout = TimeSpan.FromSeconds(30) };
-        _http.DefaultRequestHeaders.UserAgent.ParseAdd("QuotaChecker/1.0");
+        // 关闭自动重定向：改由本类自己跟随，才能在跳转后保留 Authorization 头。
+        _http = http ?? new HttpClient(new SocketsHttpHandler { AllowAutoRedirect = false })
+        {
+            Timeout = TimeSpan.FromSeconds(30),
+        };
+
+        if (!_http.DefaultRequestHeaders.UserAgent.Any())
+        {
+            _http.DefaultRequestHeaders.UserAgent.ParseAdd("QuotaChecker/1.0");
+        }
     }
 
     public async Task<TokenQuota> QueryAsync(string baseUrl, string apiKey, CancellationToken cancellationToken = default)
     {
+        var normalizedKey = NormalizeKey(apiKey);
+        if (normalizedKey.Length == 0)
+        {
+            throw new QuotaQueryException("没有填写 API Key，无法查询。");
+        }
+
         var uri = BuildUri(baseUrl);
+        var authorization = "Bearer " + normalizedKey;
 
-        using var request = new HttpRequestMessage(HttpMethod.Get, uri);
-        request.Headers.TryAddWithoutValidation("Authorization", "Bearer " + NormalizeKey(apiKey));
+        for (var hop = 0; ; hop++)
+        {
+            using var request = new HttpRequestMessage(HttpMethod.Get, uri);
+            request.Headers.TryAddWithoutValidation("Authorization", authorization);
 
-        HttpResponseMessage response;
-        try
-        {
-            response = await _http.SendAsync(request, HttpCompletionOption.ResponseContentRead, cancellationToken)
-                .ConfigureAwait(false);
-        }
-        catch (TaskCanceledException) when (!cancellationToken.IsCancellationRequested)
-        {
-            throw new QuotaQueryException($"请求超时（{uri.Host} 无响应）。");
-        }
-        catch (HttpRequestException ex)
-        {
-            throw new QuotaQueryException($"无法连接 {uri.Host}：{ex.Message}");
-        }
-
-        using (response)
-        {
-            var body = await response.Content.ReadAsStringAsync(cancellationToken).ConfigureAwait(false);
-
-            if (!response.IsSuccessStatusCode)
+            HttpResponseMessage response;
+            try
             {
-                throw new QuotaQueryException($"接口返回 {(int)response.StatusCode} {response.ReasonPhrase}：{ExtractMessage(body)}");
+                response = await _http.SendAsync(request, HttpCompletionOption.ResponseContentRead, cancellationToken)
+                    .ConfigureAwait(false);
+            }
+            catch (TaskCanceledException) when (!cancellationToken.IsCancellationRequested)
+            {
+                throw new QuotaQueryException($"请求超时（{uri.Host} 无响应）。");
+            }
+            catch (HttpRequestException ex)
+            {
+                throw new QuotaQueryException($"无法连接 {uri.Host}：{ex.Message}");
             }
 
-            return TokenQuotaParser.Parse(body);
+            using (response)
+            {
+                if (IsRedirect(response.StatusCode) && response.Headers.Location is { } location)
+                {
+                    if (hop >= MaxRedirects)
+                    {
+                        throw new QuotaQueryException($"重定向次数过多（超过 {MaxRedirects} 次），请检查接口地址。");
+                    }
+
+                    var next = new Uri(uri, location);
+                    if (!CanFollowRedirect(uri, next, out var reason))
+                    {
+                        throw new QuotaQueryException(
+                            $"站点把接口重定向到了 {next.GetLeftPart(UriPartial.Authority)}（{reason}），" +
+                            "出于安全考虑已停止，密钥没有发出。请把界面上的「接口地址」直接改成该地址。");
+                    }
+
+                    uri = next;
+                    continue;
+                }
+
+                var body = await response.Content.ReadAsStringAsync(cancellationToken).ConfigureAwait(false);
+
+                if (response.StatusCode == HttpStatusCode.Unauthorized)
+                {
+                    throw new QuotaQueryException($"接口返回 401 Unauthorized：{ExtractMessage(body)}\n（请求地址：{uri}）");
+                }
+
+                if (!response.IsSuccessStatusCode)
+                {
+                    throw new QuotaQueryException($"接口返回 {(int)response.StatusCode} {response.ReasonPhrase}：{ExtractMessage(body)}");
+                }
+
+                return TokenQuotaParser.Parse(body);
+            }
         }
     }
 
-    /// <summary>把用户填写的地址规范成 <c>.../api/usage/token</c>。</summary>
+    /// <summary>把用户填写的地址规范成 <c>.../api/usage/token/</c>（带尾斜杠，与 new-api 路由一致）。</summary>
     public static Uri BuildUri(string baseUrl)
     {
         var value = (baseUrl ?? string.Empty).Trim();
@@ -68,11 +120,17 @@ public sealed class QuotaClient
 
         value = value.TrimEnd('/');
 
-        if (!value.EndsWith("/api/usage/token", StringComparison.OrdinalIgnoreCase))
+        if (value.EndsWith(BareEndpoint, StringComparison.OrdinalIgnoreCase))
         {
-            value = value.EndsWith("/api", StringComparison.OrdinalIgnoreCase)
-                ? value + "/usage/token"
-                : value + "/api/usage/token";
+            value += "/";
+        }
+        else if (value.EndsWith("/api", StringComparison.OrdinalIgnoreCase))
+        {
+            value += "/usage/token/";
+        }
+        else
+        {
+            value += BareEndpoint + "/";
         }
 
         if (!Uri.TryCreate(value, UriKind.Absolute, out var uri))
@@ -87,13 +145,60 @@ public sealed class QuotaClient
     public static string NormalizeKey(string apiKey)
     {
         var key = (apiKey ?? string.Empty).Trim().Trim('"');
+        if (key.Length == 0)
+        {
+            return string.Empty;
+        }
+
         if (key.StartsWith("sk-", StringComparison.OrdinalIgnoreCase))
         {
             return key;
         }
 
         // 前缀容易被复制时丢掉，这里按 new-api 约定补回。
-        return key.Length > 0 && !key.Contains(' ') ? "sk-" + key : key;
+        return key.Contains(' ') ? key : "sk-" + key;
+    }
+
+    private static bool IsRedirect(HttpStatusCode status) =>
+        status is HttpStatusCode.MovedPermanently
+            or HttpStatusCode.Found
+            or HttpStatusCode.SeeOther
+            or HttpStatusCode.TemporaryRedirect
+            or HttpStatusCode.PermanentRedirect;
+
+    /// <summary>
+    /// 只跟随同主机同端口、且不降级到明文 HTTP 的跳转。
+    /// 其余情况一律拒绝，避免把密钥发送到第三方站点。
+    /// </summary>
+    private static bool CanFollowRedirect(Uri from, Uri to, out string reason)
+    {
+        reason = string.Empty;
+
+        if (to.Scheme is not ("http" or "https"))
+        {
+            reason = "目标不是 http/https";
+            return false;
+        }
+
+        if (!string.Equals(from.Host, to.Host, StringComparison.OrdinalIgnoreCase))
+        {
+            reason = $"主机由 {from.Host} 变成了 {to.Host}";
+            return false;
+        }
+
+        if (from.Port != to.Port)
+        {
+            reason = $"端口由 {from.Port} 变成了 {to.Port}";
+            return false;
+        }
+
+        if (from.Scheme == Uri.UriSchemeHttps && to.Scheme == Uri.UriSchemeHttp)
+        {
+            reason = "由 https 降级为 http";
+            return false;
+        }
+
+        return true;
     }
 
     private static string ExtractMessage(string body)

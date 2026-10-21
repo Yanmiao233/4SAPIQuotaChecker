@@ -49,7 +49,7 @@ QuotaChecker-portable-win-x64\
 ## 接口
 
 ```
-GET {站点地址}/api/usage/token
+GET {站点地址}/api/usage/token/
 Authorization: Bearer sk-xxxxxxxx
 ```
 
@@ -70,7 +70,33 @@ Authorization: Bearer sk-xxxxxxxx
 }
 ```
 
-站点地址可以只填域名（如 `https://4sapi.com`），程序会自动补全 `/api/usage/token`。
+站点地址可以只填域名（如 `https://4sapi.com`），程序会自动补全 `/api/usage/token/`。
+
+### 尾斜杠很重要（曾经的 401 坑）
+
+new-api 的路由实际注册为 **带尾斜杠** 的 `/api/usage/token/`：
+
+```go
+usageRoute := apiRouter.Group("/usage")
+tokenUsageRoute := usageRoute.Group("/token")
+tokenUsageRoute.GET("/", controller.GetTokenUsage)
+```
+
+请求不带尾斜杠时，Gin 会 301 重定向到带斜杠的地址，而 `HttpClient` 在跟随重定向时
+**会把 `Authorization` 头丢掉**，服务端于是返回：
+
+```
+401 Unauthorized {"message":"Token not provided","success":false}
+```
+
+程序现在做两件事来避免这个问题：
+
+1. 统一请求带尾斜杠的地址，从根上不触发这次重定向；
+2. 关闭 `AllowAutoRedirect`，自己跟随跳转，从而在跳转后仍保留 `Authorization`
+   （旧版站点如果只注册了不带斜杠的路由也能正常工作）。
+
+出于安全考虑，只有 **同主机 + 同端口 + 不降级为明文 HTTP** 的跳转才会被跟随；
+若站点跳到别的域名，程序会停止并提示把「接口地址」直接改成该域名，不会把密钥发出去。
 
 ## 构建与运行
 
