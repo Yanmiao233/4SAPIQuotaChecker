@@ -8,6 +8,7 @@
     <RootNamespace>QuotaChecker</RootNamespace>
     <AssemblyName>QuotaChecker</AssemblyName>
     <ApplicationManifest>app.manifest</ApplicationManifest>
+    <ApplicationIcon>app.ico</ApplicationIcon>
     <Platforms>x64;ARM64</Platforms>
     <UseWinUI>true</UseWinUI>
     <Nullable>enable</Nullable>
@@ -30,7 +31,27 @@
   <PropertyGroup Condition="'$(Configuration)' == 'Release'">
     <DebugType>none</DebugType>
     <DebugSymbols>false</DebugSymbols>
+
+    <!-- 裁剪发布体积：166 MB -> 约 85 MB（仅影响 publish，dotnet build 不受影响） -->
+    <PublishTrimmed>true</PublishTrimmed>
+    <TrimMode>partial</TrimMode>
+    <!-- WinUI / CsWinRT 依赖内置 COM 互操作；裁剪会默认关闭它，导致启动即崩溃 (0xC000027B) -->
+    <BuiltInComInteropSupport>true</BuiltInComInteropSupport>
+    <!-- 反射式 JSON 兜底；本项目自身已改用源生成序列化 -->
+    <JsonSerializerIsReflectionEnabledByDefault>true</JsonSerializerIsReflectionEnabledByDefault>
   </PropertyGroup>
+
+  <!--
+    CsWinRT 在运行时通过反射计算 COM 接口表（见 WinRT.ComWrappersSupport.GetInterfaceTableEntries）。
+    这些类型一旦被裁掉，设置 ListView.ItemsSource 之类的操作就会抛 NullReferenceException 并崩溃 (0xC000027B)。
+    因此把参与 WinRT 互操作的程序集整体保留，只让 BCL 接受裁剪。
+  -->
+  <ItemGroup Condition="'$(PublishTrimmed)' == 'true'">
+    <TrimmerRootAssembly Include="WinRT.Runtime" />
+    <TrimmerRootAssembly Include="Microsoft.WinUI" />
+    <TrimmerRootAssembly Include="CommunityToolkit.Mvvm" />
+    <TrimmerRootAssembly Include="QuotaChecker" />
+  </ItemGroup>
 
   <ItemGroup>
     <PackageReference Include="Microsoft.WindowsAppSDK" Version="1.7.250909003" />

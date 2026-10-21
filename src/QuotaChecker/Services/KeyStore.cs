@@ -1,5 +1,6 @@
 using System.Security.Cryptography;
 using System.Text;
+using System.Text.Encodings.Web;
 using System.Text.Json;
 using QuotaChecker.Models;
 
@@ -12,6 +13,13 @@ namespace QuotaChecker.Services;
 public sealed class KeyStore
 {
     private static readonly byte[] Entropy = Encoding.UTF8.GetBytes("QuotaChecker.v1");
+
+    /// <summary>源生成上下文；中文不转义输出。</summary>
+    private static readonly AppJsonContext Json = new(new JsonSerializerOptions
+    {
+        WriteIndented = true,
+        Encoder = JavaScriptEncoder.UnsafeRelaxedJsonEscaping,
+    });
 
     private readonly string _filePath;
 
@@ -35,8 +43,7 @@ public sealed class KeyStore
         try
         {
             var json = File.ReadAllText(_filePath, Encoding.UTF8);
-            var data = JsonSerializer.Deserialize<AppDataFile>(json, CreateOptions()) ?? new AppDataFile();
-            return data;
+            return JsonSerializer.Deserialize(json, Json.AppDataFile) ?? new AppDataFile();
         }
         catch (Exception ex) when (ex is JsonException or IOException or UnauthorizedAccessException)
         {
@@ -52,7 +59,7 @@ public sealed class KeyStore
             Directory.CreateDirectory(directory);
         }
 
-        var json = JsonSerializer.Serialize(data, CreateOptions());
+        var json = JsonSerializer.Serialize(data, Json.AppDataFile);
 
         // 先写临时文件再替换，避免写入过程中崩溃导致配置损坏。
         var temp = _filePath + ".tmp";
@@ -81,10 +88,4 @@ public sealed class KeyStore
             return string.Empty;
         }
     }
-
-    private static JsonSerializerOptions CreateOptions() => new()
-    {
-        WriteIndented = true,
-        Encoder = System.Text.Encodings.Web.JavaScriptEncoder.UnsafeRelaxedJsonEscaping,
-    };
 }

@@ -8,9 +8,21 @@ WinUI 3 风格的 Windows 桌面程序：添加多个 API 密钥，自动查询�
 
 ## 下载 / 直接使用
 
-不想自行编译的话，到 [Releases](https://github.com/Yanmiao233/4SAPIQuotaChecker/releases) 下载 `QuotaChecker-portable-win-x64.zip`，解压后双击 `QuotaChecker.exe` 即可。
+不想自行编译的话，到 [Releases](https://github.com/Yanmiao233/4SAPIQuotaChecker/releases) 下载
+`QuotaChecker-portable-win-x64.zip`（约 31 MB），解压后双击根目录的
+`启动 QuotaChecker.cmd` 即可。
 
-该便携版为 **self-contained**：目标机器无需安装 .NET 运行时，也无需安装 Windows App SDK。
+解压后根目录只有 3 项，程序文件都收在 `app\` 子目录里：
+
+```
+QuotaChecker-portable-win-x64\
+├── 启动 QuotaChecker.cmd      双击这个启动
+├── 使用说明.txt
+└── app\                       程序本体（151 个文件）
+```
+
+便携版为 **self-contained**：目标机器无需安装 .NET 运行时，也无需安装 Windows App SDK，
+解压即用、删目录即卸载。
 
 ## 功能
 
@@ -21,6 +33,7 @@ WinUI 3 风格的 Windows 桌面程序：添加多个 API 密钥，自动查询�
 - **无限额度 / 过期时间**：正确识别 `unlimited_quota`，无限额度密钥不计入总额度统计
 - **密钥安全**：API Key 使用 Windows DPAPI（仅当前用户可解密）加密后存于本机，界面只显示掩码
 - **跟随系统主题**：浅色 / 深色自动适配，窗口使用 Mica 背景
+- **崩溃日志**：未处理异常写入 `%LOCALAPPDATA%\QuotaChecker\crash.log`，便于反馈问题
 
 ## 换算规则
 
@@ -87,19 +100,47 @@ dotnet build src\QuotaChecker\QuotaChecker.csproj -c Debug -p:Platform=ARM64
 .\src\QuotaChecker\bin\Debug\net8.0-windows10.0.19041.0\win-x64\QuotaChecker.exe
 ```
 
-生成可分发的便携版目录：
+生成可分发目录（Release 会自动裁剪体积）：
 
 ```powershell
 dotnet publish src\QuotaChecker\QuotaChecker.csproj -c Release -p:Platform=x64 -o publish
 ```
 
-打包成压缩包：
+一键生成便携版压缩包（推荐，含裁剪 + 目录整理 + 压缩）：
 
 ```powershell
-Compress-Archive -Path publish\* -DestinationPath QuotaChecker-portable-win-x64.zip -Force
+powershell -ExecutionPolicy Bypass -File tools\build-portable.ps1
+# -Platform ARM64    出 ARM64 包
+# -NoTrim            关闭裁剪（排错用，体积翻倍）
+# -KeepAllLocales    保留全部语言资源
 ```
 
+产物在 `dist\QuotaChecker-portable-win-x64.zip`。
+
 程序为 **unpackaged + self-contained**：不需要安装 MSIX，也不需要目标机器预装 .NET 运行时或 Windows App SDK。
+
+### 体积优化说明
+
+| 措施 | 效果 |
+| --- | --- |
+| `PublishTrimmed`（Release 默认开启） | 166 MB → 90 MB |
+| 只保留 en/zh 语言资源（82 个语言目录） | −3.4 MB、−82 个目录 |
+| 移除 Widgets / WebView2 / DiaSymReader | −6.2 MB |
+| 最终压缩包 | **31.5 MB**（169 个文件） |
+
+裁剪有两点必须注意，改动 csproj 时不要删掉：
+
+1. **`BuiltInComInteropSupport=true`** —— WinUI / CsWinRT 依赖内置 COM 互操作，裁剪默认把它关掉，
+   表现为程序启动几秒后崩溃、退出码 `0xC000027B`。
+2. **`TrimmerRootAssembly`（WinRT.Runtime / Microsoft.WinUI / CommunityToolkit.Mvvm / QuotaChecker）**
+   —— CsWinRT 在运行时用反射计算 COM 接口表，这些类型被裁掉后，
+   给 `ListView.ItemsSource` 赋值就会抛 `NullReferenceException`（同样是 `0xC000027B`）。
+
+`KeyStore` 的 JSON 读写使用 **源生成序列化**（`Models/AppJsonContext.cs`）而不是反射，
+否则裁剪后密钥配置会静默读写失败。
+
+publish 时仍会看到一条 `IL2026: Built-in COM support is not trim compatible` 警告——
+这是开启 `BuiltInComInteropSupport` 的必然结果，WinUI 无法避免，不是本项目的问题。
 
 ## 数据存放位置
 
@@ -114,10 +155,20 @@ Compress-Archive -Path publish\* -DestinationPath QuotaChecker-portable-win-x64.
 
 ```
 QuotaChecker.sln
+packaging/                        便携版的根目录素材（启动器、说明）
+├─ 启动 QuotaChecker.cmd
+└─ 使用说明.txt
+tools/
+├─ build-portable.ps1             一键出便携版压缩包
+└─ make-icon.ps1                  生成 app.ico（蓝色圆角块 + 白色 ¥）
 src/QuotaChecker/
-├─ App.xaml(.cs)                  应用入口
+├─ app.ico                        程序图标（9 种尺寸）
+├─ app.manifest                   DPI 感知与系统兼容性声明
+├─ App.xaml(.cs)                  应用入口 + 崩溃日志
 ├─ MainWindow.xaml(.cs)           窗口外壳（Mica 背景、自定义标题栏、尺寸）
-├─ Models/AppModels.cs            存储模型、设置、响应解析
+├─ Models/
+│  ├─ AppModels.cs                存储模型、设置、响应解析
+│  └─ AppJsonContext.cs           源生成 JSON 序列化上下文（裁剪安全）
 ├─ Services/
 │  ├─ QuotaClient.cs              /api/usage/token 调用与地址规范化
 │  └─ KeyStore.cs                 DPAPI 加密的本地存储
@@ -132,7 +183,11 @@ src/QuotaChecker/
    └─ AddKeyDialog.xaml(.cs)      添加密钥对话框
 ```
 
+> `tools\*.ps1` 均为 **UTF-8 with BOM**（Windows PowerShell 5.1 需要 BOM 才能正确读取中文）。
+
 ## 已知限制
 
 - `user_quota`（账号余额）仅在令牌开启「允许查询用户额度」时由服务端返回；未返回时界面只展示令牌自身的额度。
 - 汇率/倍率为手动填写，程序不会联网获取实时汇率。
+- 无法做成单文件 exe：Windows App SDK 的单文件发布要求 `EnableMsixTooling`，而它依赖 Visual Studio 自带的 MSIX 构建任务，本项目为了「只装 .NET SDK 就能构建」没有引入。
+- 便携版启动器是 `.cmd` 而非 `.lnk`：快捷方式里存的是绝对路径，换个解压目录就失效了。
