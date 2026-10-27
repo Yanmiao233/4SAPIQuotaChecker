@@ -1,3 +1,4 @@
+using System.Collections.ObjectModel;
 using System.Globalization;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
@@ -120,6 +121,92 @@ public sealed partial class ApiKeyViewModel : ObservableObject
         }
     }
 
+    /// <summary>各模型消耗汇总（展开卡片时懒加载）。</summary>
+    public ObservableCollection<ModelUsage> ModelUsages { get; } = new();
+
+    [ObservableProperty]
+    private bool _isExpanded;
+
+    [ObservableProperty]
+    private bool _modelsLoading;
+
+    [ObservableProperty]
+    private string _modelsError = string.Empty;
+
+    [ObservableProperty]
+    private string _modelsSummary = string.Empty;
+
+    partial void OnIsExpandedChanged(bool value)
+    {
+        if (value && ModelUsages.Count == 0 && !ModelsLoading && ErrorMessage.Length == 0)
+        {
+            _ = LoadModelUsagesAsync();
+        }
+    }
+
+    [RelayCommand]
+    private Task LoadModels() => LoadModelUsagesAsync();
+
+    /// <summary>拉取最近日志并按模型聚合消耗。</summary>
+    public async Task LoadModelUsagesAsync()
+    {
+        if (ModelsLoading)
+        {
+            return;
+        }
+
+        var apiKey = KeyStore.Unprotect(_protectedApiKey);
+        if (apiKey.Length == 0)
+        {
+            ModelsError = "密钥无法解密，无法查询模型消耗。";
+            OnPropertyChanged(nameof(HasModelsError));
+            return;
+        }
+
+        ModelsLoading = true;
+        ModelsError = string.Empty;
+        OnPropertyChanged(nameof(HasModelsError));
+        try
+        {
+            var usages = await _client.GetModelUsageAsync(BaseUrl, apiKey).ConfigureAwait(true);
+
+            ModelUsages.Clear();
+            foreach (var usage in usages)
+            {
+                ModelUsages.Add(usage);
+            }
+
+            ModelsSummary = usages.Count == 0
+                ? "最近没有调用记录"
+                : $"最近 {Math.Min(TokenLogParser.MaxRecentItems, usages.Sum(u => u.Calls))} 次调用 · {usages.Count} 个模型 · 共 " +
+                  MoneyMath.FormatCnyCompact(usages.Sum(u => MoneyMath.QuotaToCny(u.Quota)));
+        }
+        catch (QuotaQueryException ex)
+        {
+            ModelsError = ex.Message;
+        }
+        catch (Exception ex)
+        {
+            ModelsError = "查询失败：" + ex.Message;
+        }
+        finally
+        {
+            ModelsLoading = false;
+            OnPropertyChanged(nameof(HasModelsError));
+        }
+    }
+
+    public bool HasModelsError => ModelsError.Length > 0;
+
+    /// <summary>额度刷新成功后，若模型明细已展开就同步刷新。</summary>
+    private async Task RefreshModelsIfOpenAsync()
+    {
+        if (IsExpanded && ModelUsages.Count > 0)
+        {
+            await LoadModelUsagesAsync().ConfigureAwait(true);
+        }
+    }
+
     [RelayCommand]
     private Task Refresh() => RefreshCoreAsync();
 
@@ -147,6 +234,7 @@ public sealed partial class ApiKeyViewModel : ObservableObject
         {
             var quota = await _client.QueryAsync(BaseUrl, apiKey).ConfigureAwait(true);
             Apply(quota);
+            await RefreshModelsIfOpenAsync().ConfigureAwait(true);
         }
         catch (QuotaQueryException ex)
         {

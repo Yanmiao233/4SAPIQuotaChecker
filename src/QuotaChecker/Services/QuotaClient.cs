@@ -5,7 +5,8 @@ using QuotaChecker.Models;
 namespace QuotaChecker.Services;
 
 /// <summary>
-/// 调用中转站的 <c>GET /api/usage/token/</c> 查询密钥（令牌）用量。
+/// 调用中转站接口查询密钥（令牌）用量与用量明细：
+/// <c>GET /api/usage/token/</c>（额度）、<c>GET /api/log/token</c>（最近日志）。
 /// </summary>
 public sealed class QuotaClient
 {
@@ -37,13 +38,55 @@ public sealed class QuotaClient
 
     public async Task<TokenQuota> QueryAsync(string baseUrl, string apiKey, CancellationToken cancellationToken = default)
     {
+        var quota = await SendForJsonAsync(BuildUri(baseUrl), apiKey, cancellationToken).ConfigureAwait(false);
+        return TokenQuotaParser.Parse(quota);
+    }
+
+    /// <summary>
+    /// 查询该密钥的最近调用日志（<c>GET /api/log/token</c>，最多 MaxRecentItems 条）。
+    /// 注意：new-api 里这条路由注册为 <em>不带</em> 尾斜杠，与 usage 那条正好相反。
+    /// </summary>
+    public async Task<List<ModelUsage>> GetModelUsageAsync(string baseUrl, string apiKey, CancellationToken cancellationToken = default)
+    {
+        var value = (baseUrl ?? string.Empty).Trim();
+        if (value.Length == 0)
+        {
+            value = AppSettings.DefaultBaseUrl;
+        }
+
+        if (!value.Contains("://", StringComparison.Ordinal))
+        {
+            value = "https://" + value;
+        }
+
+        value = value.TrimEnd('/');
+        if (value.EndsWith("/api", StringComparison.OrdinalIgnoreCase))
+        {
+            value += "/log/token";
+        }
+        else
+        {
+            value += "/api/log/token";
+        }
+
+        if (!Uri.TryCreate(value, UriKind.Absolute, out var uri))
+        {
+            throw new QuotaQueryException($"接口地址「{baseUrl}」格式不正确。");
+        }
+
+        var body = await SendForJsonAsync(uri, apiKey, cancellationToken).ConfigureAwait(false);
+        return TokenLogParser.ParseAndAggregate(body);
+    }
+
+    /// <summary>发 GET 并返回响应体；手动跟随安全的重定向并保留 Authorization。</summary>
+    private async Task<string> SendForJsonAsync(Uri uri, string apiKey, CancellationToken cancellationToken)
+    {
         var normalizedKey = NormalizeKey(apiKey);
         if (normalizedKey.Length == 0)
         {
             throw new QuotaQueryException("没有填写 API Key，无法查询。");
         }
 
-        var uri = BuildUri(baseUrl);
         var authorization = "Bearer " + normalizedKey;
 
         for (var hop = 0; ; hop++)
@@ -99,7 +142,7 @@ public sealed class QuotaClient
                     throw new QuotaQueryException($"接口返回 {(int)response.StatusCode} {response.ReasonPhrase}：{ExtractMessage(body)}");
                 }
 
-                return TokenQuotaParser.Parse(body);
+                return body;
             }
         }
     }

@@ -55,6 +55,21 @@ public sealed class StringToVisibilityConverter : IValueConverter
         throw new NotSupportedException();
 }
 
+/// <summary>
+/// true → Collapsed（用于加载中时隐藏内容）；参数 "Invert" 时 true → Visible。
+/// </summary>
+public sealed class InverseBooleanToVisibilityConverter : IValueConverter
+{
+    public object Convert(object value, Type targetType, object parameter, string language)
+    {
+        var flag = value is bool b && b;
+        return flag ? Visibility.Collapsed : Visibility.Visible;
+    }
+
+    public object ConvertBack(object value, Type targetType, object parameter, string language) =>
+        throw new NotSupportedException();
+}
+
 /// <summary>bool 取反。</summary>
 public sealed class InverseBooleanConverter : IValueConverter
 {

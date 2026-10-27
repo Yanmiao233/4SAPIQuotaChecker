@@ -103,6 +103,14 @@ Write-Host "==> 组装目录结构" -ForegroundColor Cyan
 $rootDir = Join-Path $staging $packageName
 Copy-Item (Join-Path $packaging '*') $rootDir -Recurse -Force
 
+# 外层启动器（几 KB 原生 exe，按自身目录定位 app\QuotaChecker.exe，整包移动有效）
+$launcherScript = Join-Path $repoRoot 'tools\make-launcher.ps1'
+& $launcherScript -BaseDir $rootDir -IcoPath (Join-Path $repoRoot 'src\QuotaChecker\app.ico') |
+    ForEach-Object { Write-Host "    $_" }
+if (-not (Test-Path (Join-Path $rootDir '启动 QuotaChecker.exe'))) {
+    throw '生成外层启动器失败'
+}
+
 # ---------- 打包 ----------
 $sizeMb = [math]::Round(((Get-ChildItem $rootDir -Recurse -File | Measure-Object Length -Sum).Sum) / 1MB, 1)
 $fileCount = (Get-ChildItem $rootDir -Recurse -File | Measure-Object).Count
@@ -130,6 +138,6 @@ Write-Host "  压缩后   : $zipMb MB"
 Write-Host "  SHA256   : $sha"
 Write-Host ""
 Write-Host "解压后根目录只有 3 项："
-Write-Host "  启动 QuotaChecker.cmd   双击即用"
+Write-Host "  启动 QuotaChecker.exe   双击即用（几 KB 的原生启动器，可随包移动）"
 Write-Host "  使用说明.txt"
 Write-Host "  app\                    程序文件"

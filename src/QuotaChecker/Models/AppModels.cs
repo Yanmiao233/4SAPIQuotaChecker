@@ -66,6 +66,25 @@ public sealed record TokenQuota(
     double? UserQuotaAvailable,
     double? UserQuotaUsed);
 
+/// <summary>某个模型的消耗汇总（由日志聚合而来）。</summary>
+public sealed record ModelUsage(
+    string ModelName,
+    double Quota,
+    long Calls,
+    long PromptTokens,
+    long CompletionTokens)
+{
+    public string QuotaCnyText => Converters.MoneyMath.FormatCnyCompact(Converters.MoneyMath.QuotaToCny(Quota));
+
+    public string QuotaText => Converters.MoneyMath.FormatQuota(Quota);
+
+    public string CallsText => Calls.ToString("N0", System.Globalization.CultureInfo.InvariantCulture);
+
+    public string TokensText => PromptTokens + CompletionTokens <= 0
+        ? string.Empty
+        : $"{Converters.MoneyMath.FormatQuota(PromptTokens + CompletionTokens)} tokens";
+}
+
 /// <summary>查询密钥额度失败时抛出。</summary>
 public sealed class QuotaQueryException : Exception
 {
@@ -168,5 +187,86 @@ public static class TokenQuotaParser
         {
             return null;
         }
+    }
+}
+
+/// <summary>解析 <c>GET /api/log/token</c> 的日志数组，并按模型聚合消耗。</summary>
+public static class TokenLogParser
+{
+    /// <summary>服务端 new-api 的 MaxRecentItems 上限。</summary>
+    public const int MaxRecentItems = 1000;
+
+    public static List<ModelUsage> ParseAndAggregate(string json)
+    {
+        JsonDocument doc;
+        try
+        {
+            doc = JsonDocument.Parse(json);
+        }
+        catch (JsonException)
+        {
+            throw new QuotaQueryException("响应不是合法的 JSON，请确认接口地址是否正确。");
+        }
+
+        using (doc)
+        {
+            var root = doc.RootElement;
+
+            if (!root.TryGetProperty("data", out var data) || data.ValueKind != JsonValueKind.Array)
+            {
+                var message = root.TryGetProperty("message", out var m) && m.ValueKind == JsonValueKind.String
+                    ? m.GetString() ?? "接口未返回日志数据。"
+                    : "接口未返回日志数据。";
+                throw new QuotaQueryException(message);
+            }
+
+            var byModel = new Dictionary<string, (double Quota, long Calls, long Prompt, long Completion)>(StringComparer.OrdinalIgnoreCase);
+
+            foreach (var entry in data.EnumerateArray())
+            {
+                // type=2 是消费日志（new-api LogTypeConsume）
+                if (entry.TryGetProperty("type", out var type) && type.ValueKind == JsonValueKind.Number && type.GetInt32() != 2)
+                {
+                    continue;
+                }
+
+                var model = entry.TryGetProperty("model_name", out var mn) && mn.ValueKind == JsonValueKind.String
+                    ? mn.GetString() ?? string.Empty
+                    : string.Empty;
+                if (model.Length == 0)
+                {
+                    model = "(未知模型)";
+                }
+
+                var quota = GetDouble(entry, "quota") ?? 0d;
+                var prompt = (long)(GetDouble(entry, "prompt_tokens") ?? 0d);
+                var completion = (long)(GetDouble(entry, "completion_tokens") ?? 0d);
+
+                var (q, c, p, cm) = byModel.TryGetValue(model, out var cur)
+                    ? cur
+                    : (0d, 0L, 0L, 0L);
+                byModel[model] = (q + quota, c + 1, p + prompt, cm + completion);
+            }
+
+            return byModel
+                .OrderByDescending(kv => kv.Value.Quota)
+                .Select(kv => new ModelUsage(kv.Key, kv.Value.Quota, kv.Value.Calls, kv.Value.Prompt, kv.Value.Completion))
+                .ToList();
+        }
+    }
+
+    private static double? GetDouble(JsonElement element, string name)
+    {
+        if (!element.TryGetProperty(name, out var value))
+        {
+            return null;
+        }
+
+        return value.ValueKind switch
+        {
+            JsonValueKind.Number => value.GetDouble(),
+            JsonValueKind.String when double.TryParse(value.GetString(), out var parsed) => parsed,
+            _ => null,
+        };
     }
 }

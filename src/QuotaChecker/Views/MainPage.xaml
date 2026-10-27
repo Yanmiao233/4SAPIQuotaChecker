@@ -5,6 +5,7 @@
     xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
     xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
     xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+    xmlns:models="using:QuotaChecker.Models"
     xmlns:vm="using:QuotaChecker.ViewModels"
     mc:Ignorable="d">
 
@@ -182,6 +183,77 @@
                                                    Foreground="{ThemeResource SystemFillColorCriticalBrush}"
                                                    TextWrapping="Wrap" FontSize="12"
                                                    Visibility="{x:Bind ErrorMessage, Mode=OneWay, Converter={StaticResource StringToVisibility}}" />
+
+                                        <!-- 各模型消耗（展开时懒加载） -->
+                                        <Expander IsExpanded="{x:Bind IsExpanded, Mode=TwoWay}"
+                                                  HorizontalAlignment="Stretch" HorizontalContentAlignment="Stretch"
+                                                  Margin="0,4,0,0"
+                                                  AutomationProperties.Name="各模型消耗">
+                                            <Expander.Header>
+                                                <StackPanel Orientation="Horizontal" Spacing="8">
+                                                    <FontIcon Glyph="&#xE9D9;" FontSize="13"
+                                                              Foreground="{ThemeResource TextFillColorSecondaryBrush}" />
+                                                    <TextBlock Text="各模型消耗"
+                                                               Style="{ThemeResource CaptionTextBlockStyle}"
+                                                               VerticalAlignment="Center" />
+                                                    <ProgressRing IsActive="{x:Bind ModelsLoading, Mode=OneWay}"
+                                                                  Width="14" Height="14" VerticalAlignment="Center" />
+                                                    <TextBlock Text="{x:Bind ModelsSummary, Mode=OneWay}"
+                                                               Style="{ThemeResource CaptionTextBlockStyle}"
+                                                               Foreground="{ThemeResource TextFillColorSecondaryBrush}"
+                                                               VerticalAlignment="Center" />
+                                                </StackPanel>
+                                            </Expander.Header>
+                                            <StackPanel Spacing="8" Padding="4,8,4,4">
+                                                <TextBlock Text="{x:Bind ModelsError, Mode=OneWay}"
+                                                           Foreground="{ThemeResource SystemFillColorCriticalBrush}"
+                                                           TextWrapping="Wrap" FontSize="12"
+                                                           Visibility="{x:Bind ModelsError, Mode=OneWay, Converter={StaticResource StringToVisibility}}" />
+
+                                                <!-- 表头 -->
+                                                <Grid ColumnSpacing="12" Visibility="{x:Bind ModelsLoading, Mode=OneWay, Converter={StaticResource InverseToVisibility}}">
+                                                    <Grid.ColumnDefinitions>
+                                                        <ColumnDefinition Width="*" />
+                                                        <ColumnDefinition Width="110" />
+                                                        <ColumnDefinition Width="120" />
+                                                    </Grid.ColumnDefinitions>
+                                                    <TextBlock Grid.Column="0" Text="模型" Style="{ThemeResource CaptionTextBlockStyle}"
+                                                               Foreground="{ThemeResource TextFillColorSecondaryBrush}" />
+                                                    <TextBlock Grid.Column="1" Text="消耗（人民币）" Style="{ThemeResource CaptionTextBlockStyle}"
+                                                               Foreground="{ThemeResource TextFillColorSecondaryBrush}" />
+                                                    <TextBlock Grid.Column="2" Text="调用次数" Style="{ThemeResource CaptionTextBlockStyle}"
+                                                               Foreground="{ThemeResource TextFillColorSecondaryBrush}" />
+                                                </Grid>
+
+                                                <ItemsControl ItemsSource="{x:Bind ModelUsages, Mode=OneWay}">
+                                                    <ItemsControl.ItemTemplate>
+                                                        <DataTemplate x:DataType="models:ModelUsage">
+                                                            <Grid ColumnSpacing="12" Padding="0,2">
+                                                                <Grid.ColumnDefinitions>
+                                                                    <ColumnDefinition Width="*" />
+                                                                    <ColumnDefinition Width="110" />
+                                                                    <ColumnDefinition Width="120" />
+                                                                </Grid.ColumnDefinitions>
+                                                                <TextBlock Grid.Column="0" Text="{x:Bind ModelName}"
+                                                                           TextTrimming="CharacterEllipsis"
+                                                                           ToolTipService.ToolTip="{x:Bind ModelName}" />
+                                                                <TextBlock Grid.Column="1" Text="{x:Bind QuotaCnyText}" FontWeight="SemiBold" />
+                                                                <TextBlock Grid.Column="2" Style="{ThemeResource CaptionTextBlockStyle}"
+                                                                           Foreground="{ThemeResource TextFillColorSecondaryBrush}"
+                                                                           VerticalAlignment="Center">
+                                                                    <Run Text="{x:Bind CallsText, Mode=OneWay}" />
+                                                                    <Run Text="次" />
+                                                                </TextBlock>
+                                                            </Grid>
+                                                        </DataTemplate>
+                                                    </ItemsControl.ItemTemplate>
+                                                </ItemsControl>
+
+                                                <TextBlock FontSize="11" TextWrapping="Wrap"
+                                                           Foreground="{ThemeResource TextFillColorSecondaryBrush}"
+                                                           Text="由最近调用日志聚合（最多 1000 条）；额度刷新成功后若已展开会同步更新。" />
+                                            </StackPanel>
+                                        </Expander>
                                     </StackPanel>
 
                                     <StackPanel Grid.Column="2" Spacing="2" VerticalAlignment="Center" MinWidth="140">

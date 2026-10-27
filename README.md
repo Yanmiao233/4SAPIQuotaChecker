@@ -10,15 +10,15 @@ WinUI 3 风格的 Windows 桌面程序：添加多个 API 密钥，自动查询�
 
 不想自行编译的话，到 [Releases](https://github.com/Yanmiao233/4SAPIQuotaChecker/releases) 下载
 `QuotaChecker-portable-win-x64-v<版本>.zip`（约 31 MB），解压后双击根目录的
-`启动 QuotaChecker.cmd` 即可。
+`启动 QuotaChecker.exe` 即可。
 
 解压后根目录只有 3 项，程序文件都收在 `app\` 子目录里：
 
 ```
 QuotaChecker-portable-win-x64\
-├── 启动 QuotaChecker.cmd      双击这个启动
+├── 启动 QuotaChecker.exe      双击这个启动（几 KB 的原生启动器）
 ├── 使用说明.txt
-└── app\                       程序本体（151 个文件）
+└── app\                       程序本体
 ```
 
 便携版为 **self-contained**：目标机器无需安装 .NET 运行时，也无需安装 Windows App SDK，
@@ -28,6 +28,7 @@ QuotaChecker-portable-win-x64\
 
 - **添加多个密钥**：每个密钥可单独命名、指定接口地址，添加后立即自动查询
 - **自动查询 quota**：启动时自动刷新全部启用的密钥，也可手动「刷新全部」或单独刷新某个密钥
+- **各模型消耗**：展开密钥卡片查看每个模型的消耗金额与调用次数（由最近最多 1000 条调用日志聚合）
 - **定时自动刷新**：可在「设置」里选择 1 / 5 / 15 / 30 / 60 分钟，默认关闭
 - **换算人民币**：`配额 ÷ 500000 × 站点倍率`，界面同步显示配额原值、官方美元价与人民币金额
 - **总计消耗金额**：顶部卡片实时汇总所有启用密钥的累计消耗、剩余额度与总额度
@@ -82,6 +83,22 @@ Authorization: Bearer sk-xxxxxxxx
   }
 }
 ```
+
+### 各模型消耗
+
+密钥卡片上的「各模型消耗」展开条对应：
+
+```
+GET {站点地址}/api/log/token
+Authorization: Bearer sk-xxx
+```
+
+返回该密钥最近最多 1000 条调用日志（每条含 `model_name` / `quota` /
+`prompt_tokens` / `completion_tokens`），程序在本地按模型聚合出消耗金额与调用次数。
+只看总额的话不用展开，展开才发起这次请求。
+
+> 官方文档另有一个 `/api/log/self/token_daily/model_full` 接口（按 token_id 查模型汇总），
+> 但它要求「系统访问令牌 + 用户名」而不是 sk- 密钥，本程序没有采用。
 
 站点地址可以只填域名（如 `https://4sapi.org`），程序会自动补全 `/api/usage/token/`。
 
@@ -158,6 +175,11 @@ powershell -ExecutionPolicy Bypass -File tools\build-portable.ps1
 产物在 `dist\QuotaChecker-portable-win-x64-v<版本>.zip`，压缩包名自动带上版本；
 解压后的目录名保持 `QuotaChecker-portable-win-x64` 不变，方便覆盖升级。
 
+外层启动器说明：`.lnk` 快捷方式保存的目标会被 Windows 转成本机绝对路径，
+压缩包解压到别的目录后必然失效，所以外层放的是一个 **20KB 的原生启动器 exe**
+（Windows 自带的 csc 编译，目标机器无需任何运行时），它按自身所在目录启动
+`app\QuotaChecker.exe`，整包移动/改名/换机器都有效。
+
 程序为 **unpackaged + self-contained**：不需要安装 MSIX，也不需要目标机器预装 .NET 运行时或 Windows App SDK。
 
 ### 体积优化说明
@@ -201,6 +223,7 @@ packaging/                        便携版的根目录素材（启动器、说�
 └─ 使用说明.txt
 tools/
 ├─ build-portable.ps1             一键出便携版压缩包
+├─ make-launcher.ps1              生成外层「启动 QuotaChecker.exe」启动器
 └─ make-icon.ps1                  生成 app.ico（蓝色圆角块 + 白色 ¥）
 src/QuotaChecker/
 ├─ app.ico                        程序图标（9 种尺寸）

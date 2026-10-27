@@ -23,6 +23,7 @@
             <conv:CountToVisibilityConverter x:Key="CountToVisibility" />
             <conv:StringToVisibilityConverter x:Key="StringToVisibility" />
             <conv:InverseBooleanConverter x:Key="InverseBool" />
+            <conv:InverseBooleanToVisibilityConverter x:Key="InverseToVisibility" />
         </ResourceDictionary>
     </Application.Resources>
 </Application>

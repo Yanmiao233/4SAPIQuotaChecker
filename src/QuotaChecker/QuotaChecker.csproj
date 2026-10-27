@@ -7,7 +7,7 @@
     <SupportedOSPlatformVersion>10.0.17763.0</SupportedOSPlatformVersion>
     <RootNamespace>QuotaChecker</RootNamespace>
     <AssemblyName>QuotaChecker</AssemblyName>
-    <Version>1.2.0</Version>
+    <Version>1.3.0</Version>
     <ApplicationManifest>app.manifest</ApplicationManifest>
     <ApplicationIcon>app.ico</ApplicationIcon>
     <Platforms>x64;ARM64</Platforms>
