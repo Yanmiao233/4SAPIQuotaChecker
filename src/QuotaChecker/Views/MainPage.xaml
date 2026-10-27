@@ -1,4 +1,4 @@
-<?xml version="1.0" encoding="utf-8"?>
+﻿<?xml version="1.0" encoding="utf-8"?>
 <UserControl
     x:Class="QuotaChecker.Views.MainPage"
     xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
@@ -117,6 +117,21 @@
                                         <ComboBoxItem Content="30 分钟" Tag="1800" />
                                         <ComboBoxItem Content="60 分钟" Tag="3600" />
                                     </ComboBox>
+
+                                    <Grid ColumnSpacing="8">
+                                        <Grid.ColumnDefinitions>
+                                            <ColumnDefinition Width="*" />
+                                            <ColumnDefinition Width="Auto" />
+                                        </Grid.ColumnDefinitions>
+                                        <TextBlock Grid.Column="0" VerticalAlignment="Center"
+                                                   Style="{ThemeResource CaptionTextBlockStyle}"
+                                                   Foreground="{ThemeResource TextFillColorSecondaryBrush}">
+                                            <Run Text="当前版本 v" />
+                                            <Run x:Name="VersionRun" />
+                                        </TextBlock>
+                                        <Button Grid.Column="1" Content="检查更新" Click="OnCheckUpdateClick"
+                                                AutomationProperties.Name="检查更新" />
+                                    </Grid>
 
                                     <TextBlock TextWrapping="Wrap" FontSize="12"
                                                Foreground="{ThemeResource TextFillColorSecondaryBrush}"

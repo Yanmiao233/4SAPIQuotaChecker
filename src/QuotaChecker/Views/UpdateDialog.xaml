@@ -1,0 +1,30 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<ContentDialog
+    x:Class="QuotaChecker.Views.UpdateDialog"
+    xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+    Title="软件更新"
+    PrimaryButtonText="下载并安装"
+    CloseButtonText="取消"
+    DefaultButton="Primary">
+
+    <StackPanel Width="440" Spacing="12">
+        <InfoBar x:Name="ErrorBar" Severity="Error" IsClosable="False" IsOpen="False" />
+
+        <TextBlock x:Name="StatusText" Text="正在检查更新…" TextWrapping="Wrap" />
+
+        <!-- 新版本信息 -->
+        <ScrollViewer x:Name="NotesViewer" MaxHeight="240" VerticalScrollBarVisibility="Auto"
+                      Visibility="Collapsed">
+            <TextBlock x:Name="NotesText" TextWrapping="Wrap" FontSize="13"
+                       IsTextSelectionEnabled="True" />
+        </ScrollViewer>
+
+        <!-- 下载进度 -->
+        <StackPanel x:Name="ProgressPanel" Spacing="4" Visibility="Collapsed">
+            <ProgressBar x:Name="DownloadBar" Maximum="100" />
+            <TextBlock x:Name="ProgressText" FontSize="12"
+                       Foreground="{ThemeResource TextFillColorSecondaryBrush}" />
+        </StackPanel>
+    </StackPanel>
+</ContentDialog>

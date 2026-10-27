@@ -1,5 +1,6 @@
-using Microsoft.UI.Xaml;
+﻿using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Controls;
+using QuotaChecker.Services;
 using QuotaChecker.ViewModels;
 
 namespace QuotaChecker.Views;
@@ -39,6 +40,8 @@ public sealed partial class MainPage : UserControl
         }
 
         _suppressAutoRefreshEvent = false;
+
+        VersionRun.Text = UpdateService.CurrentVersion;
     }
 
     private bool TrySelectPreset(int seconds)
@@ -72,6 +75,35 @@ public sealed partial class MainPage : UserControl
     }
 
     private void OnRateChanged(NumberBox sender, NumberBoxValueChangedEventArgs args) => Vm.ApplyRate();
+
+    private void OnCheckUpdateClick(object sender, RoutedEventArgs e)
+    {
+        // 先收起设置弹层，避免对话框和弹层叠加
+        if (sender is FrameworkElement { Parent: Grid grid })
+        {
+            var flyoutOwner = FindAncestorButton(grid);
+            flyoutOwner?.Flyout?.Hide();
+        }
+
+        _ = new UpdateDialog(RootGrid.XamlRoot).ShowAsync();
+    }
+
+    private static Button? FindAncestorButton(FrameworkElement element)
+    {
+        // 设置按钮的 Flyout 挂在按钮上；从这里向上找 Button 即可
+        DependencyObject current = element;
+        while (current is not null)
+        {
+            if (current is Button b && b.Flyout is not null)
+            {
+                return b;
+            }
+
+            current = Microsoft.UI.Xaml.Media.VisualTreeHelper.GetParent(current);
+        }
+
+        return null;
+    }
 
     private async void OnAddKeyClick(object sender, RoutedEventArgs e)
     {

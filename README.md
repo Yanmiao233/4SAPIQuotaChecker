@@ -1,4 +1,4 @@
-# 配额统计 QuotaChecker
+﻿# 配额统计 QuotaChecker
 
 WinUI 3 风格的 Windows 桌面程序：添加多个 API 密钥，自动查询每个密钥的 **quota 消耗**，换算成**人民币金额**，并汇总全部密钥的总消耗。
 
@@ -36,6 +36,7 @@ QuotaChecker-portable-win-x64\
 - **密钥安全**：API Key 使用 Windows DPAPI（仅当前用户可解密）加密后存于本机，界面只显示掩码
 - **跟随系统主题**：浅色 / 深色自动适配，窗口使用 Mica 背景
 - **崩溃日志**：未处理异常写入 `%LOCALAPPDATA%\QuotaChecker\crash.log`，便于反馈问题
+- **应用内更新**：设置菜单里「检查更新」，一键下载新版本并自动重启完成升级
 
 ## 换算规则
 
@@ -204,6 +205,20 @@ powershell -ExecutionPolicy Bypass -File tools\build-portable.ps1
 
 publish 时仍会看到一条 `IL2026: Built-in COM support is not trim compatible` 警告——
 这是开启 `BuiltInComInteropSupport` 的必然结果，WinUI 无法避免，不是本项目的问题。
+
+## 应用内更新
+
+设置菜单（齿轮）→「检查更新」：
+
+1. 程序请求 GitHub Releases 最新版本并与当前版本比较（匿名 API，每 IP 每小时 60 次限额）
+2. 有新版本时显示更新说明与附件大小，确认后下载（带进度）
+3. 点「重启并更新」：程序退出 → 更新器替换 `app\` 目录 → 自动重启
+
+- **密钥配置存放在 `%LOCALAPPDATA%\QuotaChecker\`，更新不影响**
+- 只支持 win-x64 便携版布局（`app\` 上级目录结构）；开发构建会提示手动下载
+- 更新器是更新时临时编译的几 KB 原生程序（Windows 自带 csc），全程无黑框
+- 下载内置断流看门狗：超过 120 秒没有数据会报错而不是永远等待
+- GitHub 匿名 API 有限额，若提示 rate limit exceeded 请稍后再试
 
 ## 数据存放位置
 

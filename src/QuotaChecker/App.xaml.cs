@@ -1,4 +1,4 @@
-using System.Text;
+﻿using System.Text;
 using Microsoft.UI.Xaml;
 using QuotaChecker.Services;
 using QuotaChecker.ViewModels;
@@ -8,7 +8,7 @@ namespace QuotaChecker;
 /// <summary>应用入口。</summary>
 public partial class App : Application
 {
-    private Window? _window;
+    private static Window? _window;
 
     public App()
     {
@@ -33,6 +33,9 @@ public partial class App : Application
 
     protected override void OnLaunched(LaunchActivatedEventArgs args)
     {
+        // 清理上次更新留下的暂存目录
+        UpdateService.CleanupStaleStaging();
+
         ViewModel = new MainViewModel(new KeyStore(), new QuotaClient());
         ViewModel.Initialize();
 
@@ -41,6 +44,9 @@ public partial class App : Application
 
         ViewModel.StartBackgroundRefresh();
     }
+
+    /// <summary>更新器已接管，退出主程序（更新器会等本进程退出后替换文件并重启）。</summary>
+    public static void ShutdownForUpdate() => _window?.Close();
 
     private static void WriteCrashLog(string source, Exception? exception)
     {
