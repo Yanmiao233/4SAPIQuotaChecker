@@ -448,13 +448,25 @@ try {
     # 4) 根目录文件（启动器 / 说明）
     Get-ChildItem $src -File | Copy-Item -Destination $dst -Force -ErrorAction Stop
 
-    # 4.1) 清理历史遗留的旧启动器名称
-    foreach ($legacy in @('启动 QuotaChecker.exe', '启动 QuotaChecker.cmd', 'QuotaChecker.lnk')) {
-        $old = Join-Path $dst $legacy
-        if (Test-Path $old) { Remove-Item $old -Force -ErrorAction SilentlyContinue }
+    # 5) 删除新包里已不存在的旧根文件（按清单比对；保留用户数据与日志）
+    $manifestFile = Join-Path $src 'package-manifest.txt'
+    if (Test-Path $manifestFile) {
+        $keep = @{}
+        foreach ($line in (Get-Content $manifestFile -Encoding UTF8)) {
+            $n = $line.Trim()
+            if ($n.Length -gt 0) { $keep[$n] = $true }
+        }
+        # 用户数据 / 运行产物不参与清理
+        foreach ($reserved in @('keys.json', 'keys.json.bak', 'update-result.txt', 'update.json')) { $keep[$reserved] = $true }
+
+        Get-ChildItem $dst -File | ForEach-Object {
+            if (-not $keep.ContainsKey($_.Name)) {
+                try { Remove-Item $_.FullName -Force -ErrorAction Stop } catch { }
+            }
+        }
     }
 
-    # 5) 校验主程序确实被换成新版本
+    # 6) 校验主程序确实被换成新版本
     $newVer = (Get-Item $exe).VersionInfo.FileVersion
     $oldVer = (Get-Item (Join-Path $srcApp 'QuotaChecker.exe')).VersionInfo.FileVersion
     if ($newVer -ne $oldVer) { throw (""exe not replaced: dst=$newVer src=$oldVer"") }
@@ -491,6 +503,28 @@ Start-Process -FilePath $exe -WorkingDirectory (Join-Path $dst 'app')
         if (Process.Start(psi) is null)
         {
             throw new InvalidOperationException("无法启动更新器。");
+        }
+    }
+
+    /// <summary>
+    /// 清理安装根目录下已废弃的外层文件（旧启动器名等）。
+    /// 在程序启动时执行，这样即使用户是用旧版更新器升级上来的，也能立刻清理干净。
+    /// </summary>
+    public static void CleanupObsoleteRootFiles(string? installRoot = null)
+    {
+        var root = installRoot ?? DetectInstallRoot();
+        if (root is null)
+        {
+            return;
+        }
+
+        foreach (var name in new[] { "启动 QuotaChecker.exe", "启动 QuotaChecker.cmd", "QuotaChecker.lnk" })
+        {
+            var path = Path.Combine(root, name);
+            if (File.Exists(path))
+            {
+                try { File.Delete(path); } catch { /* 被占用就下次再试 */ }
+            }
         }
     }
 

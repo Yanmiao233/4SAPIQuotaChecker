@@ -111,6 +111,12 @@ if (-not (Test-Path (Join-Path $rootDir 'QuotaChecker.exe'))) {
     throw '生成外层启动器失败'
 }
 
+# 生成包根目录清单：更新器据此删除新版本中已不存在的旧文件
+$rootFiles = @(Get-ChildItem $rootDir -File | ForEach-Object { $_.Name }) + 'package-manifest.txt'
+$manifestFile = Join-Path $rootDir 'package-manifest.txt'
+[System.IO.File]::WriteAllLines($manifestFile, $rootFiles, (New-Object System.Text.UTF8Encoding($false)))
+Write-Host "    清单: $(($rootFiles) -join ', ')"
+
 # ---------- 打包 ----------
 $sizeMb = [math]::Round(((Get-ChildItem $rootDir -Recurse -File | Measure-Object Length -Sum).Sum) / 1MB, 1)
 $fileCount = (Get-ChildItem $rootDir -Recurse -File | Measure-Object).Count

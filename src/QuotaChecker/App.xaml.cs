@@ -33,8 +33,9 @@ public partial class App : Application
 
     protected override void OnLaunched(LaunchActivatedEventArgs args)
     {
-        // 清理上次更新留下的暂存目录
+        // 清理上次更新留下的暂存目录，并清掉旧版启动器等废弃文件
         UpdateService.CleanupStaleStaging();
+        UpdateService.CleanupObsoleteRootFiles();
 
         ViewModel = new MainViewModel(new KeyStore(), new QuotaClient());
         ViewModel.Initialize();

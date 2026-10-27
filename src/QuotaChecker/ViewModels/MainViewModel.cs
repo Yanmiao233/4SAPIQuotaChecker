@@ -20,6 +20,17 @@ public sealed partial class MainViewModel : ObservableObject
     private bool _isUpdatingDerived;
     private DispatcherQueueTimer? _autoRefreshTimer;
 
+    /// <summary>启动读取失败时为 true：在用户重新录入前不写盘，避免覆盖原文件。</summary>
+    private bool _loadFailed;
+
+    private string? _loadWarning;
+
+    /// <summary>是否处于「数据文件读取失败」状态。</summary>
+    public bool HasLoadFailure => _loadFailed;
+
+    /// <summary>读取失败时给用户的提示。</summary>
+    public string LoadFailureText => _loadWarning ?? string.Empty;
+
     public MainViewModel(KeyStore store, QuotaClient client)
     {
         _store = store;
@@ -79,8 +90,13 @@ public sealed partial class MainViewModel : ObservableObject
 
     public void Initialize()
     {
-        var data = _store.Load();
+        var loaded = _store.Load();
+        var data = loaded.Data;
         DataFilePath = _store.FilePath;
+
+        // 读取失败时禁止自动写回，否则会把原有文件覆盖成空列表（密钥就"消失"了）
+        _loadFailed = loaded.Status is LoadStatus.Corrupt;
+        _loadWarning = loaded.Message;
 
         AppSettings.RateCnyPerUsd = data.RateCnyPerUsd > 0 ? data.RateCnyPerUsd : 1d;
         AppSettings.QuotaPerUsd = data.QuotaPerUsd > 0 ? data.QuotaPerUsd : AppSettings.DefaultQuotaPerUsd;
@@ -102,7 +118,7 @@ public sealed partial class MainViewModel : ObservableObject
             AddViewModel(key);
         }
 
-        StatusMessage = data.LoadWarning ?? (Keys.Count == 0
+        StatusMessage = loaded.Message ?? (Keys.Count == 0
             ? "点击「添加密钥」开始统计，密钥用 DPAPI 加密后仅保存在本机。"
             : $"已载入 {Keys.Count} 个密钥，正在自动查询额度…");
 
@@ -131,9 +147,15 @@ public sealed partial class MainViewModel : ObservableObject
         };
 
         var vm = AddViewModel(stored);
+        // 用户主动录入 → 视为接受覆盖，解除「读取失败不写盘」保护
+        _loadFailed = false;
         Persist();
         UpdateDerived();
-        StatusMessage = $"已添加「{vm.Name}」，正在查询额度…";
+
+        StatusMessage = LastSaveError.Length > 0
+            ? $"密钥已添加，但保存失败：{LastSaveError}"
+            : $"已添加「{vm.Name}」，正在查询额度…";
+
         await vm.RefreshCoreAsync().ConfigureAwait(true);
         UpdateDerived();
     }
@@ -375,14 +397,33 @@ public static string FormatMinutes(int minutes) => minutes switch
             Keys = Keys.Select(k => k.ToStoredKey()).ToList(),
         };
 
+        if (_loadFailed)
+        {
+            // 直接写盘会覆盖用户原有数据，这里拒绝；用户重新添加密钥后会自动解除
+            StatusMessage = "数据文件读取失败，已暂停自动保存以保护原有数据。";
+            return;
+        }
+
         try
         {
             _store.Save(data);
+            LastSaveError = string.Empty;
         }
-        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+        catch (Exception ex)
         {
+            LastSaveError = ex.Message;
             StatusMessage = "本地数据保存失败：" + ex.Message;
         }
+    }
+
+    /// <summary>最近一次保存失败的原因（空表示正常）。</summary>
+    public string LastSaveError { get; private set; } = string.Empty;
+
+    /// <summary>解除「读取失败时禁止写盘」状态并立即保存。</summary>
+    public void AllowSaveAfterLoadFailure()
+    {
+        _loadFailed = false;
+        Persist();
     }
 
     public void UpdateDerived()
