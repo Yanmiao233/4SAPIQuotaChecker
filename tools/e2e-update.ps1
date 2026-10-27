@@ -1,4 +1,4 @@
-﻿param([string]$Root)
+﻿param([string]$Root = 'unused', [string]$ExpectedVersion = '1.5.0')
 
 # 一体化 E2E：旧版实例已在运行的前提下
 #   打开设置 -> 检查更新 -> 等待对话框 -> 下载(最长35分钟) -> 重启并更新 -> 验证版本
@@ -43,7 +43,7 @@ $state = $null
 for ($i = 0; $i -lt 18; $i++) {
     Start-Sleep -Seconds 5
     $texts = DialogTexts
-    if ($texts | Where-Object { $_ -eq '发现新版本 v1.4.0' }) { $state = 'available'; break }
+    if ($texts | Where-Object { $_ -eq ('发现新版本 v' + $ExpectedVersion) }) { $state = 'available'; break }
     if ($texts | Where-Object { $_ -like '已是最新版本*' })      { $state = 'uptodate'; break }
     if ($texts | Where-Object { $_ -like '检查更新失败*' })      { $state = 'error'; break }
 }
@@ -76,8 +76,8 @@ for ($j = 0; $j -lt 40; $j++) {
     $a = Get-Process -Name QuotaChecker -ErrorAction SilentlyContinue | Select-Object -First 1
     if ($a) {
         $fver = (Get-Item $a.Path).VersionInfo.FileVersion
-        if ($fver -eq '1.4.0.0') {
-            Write-Output "SUCCESS: restarted v1.4.0 (~$((($i+1)*6)+$j*2)s) path=$($a.Path)"
+        if ($fver -eq ($ExpectedVersion + '.0')) {
+            Write-Output "SUCCESS: restarted v$ExpectedVersion (~$((($i+1)*6)+$j*2)s) path=$($a.Path)"
             $ok = $true
             break
         }

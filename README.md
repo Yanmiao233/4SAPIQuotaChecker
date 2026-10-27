@@ -36,7 +36,8 @@ QuotaChecker-portable-win-x64\
 - **密钥安全**：API Key 使用 Windows DPAPI（仅当前用户可解密）加密后存于本机，界面只显示掩码
 - **跟随系统主题**：浅色 / 深色自动适配，窗口使用 Mica 背景
 - **崩溃日志**：未处理异常写入 `%LOCALAPPDATA%\QuotaChecker\crash.log`，便于反馈问题
-- **应用内更新**：设置菜单里「检查更新」，一键下载新版本并自动重启完成升级
+- **应用内更新**：设置里「检查更新」，一键下载新版本并自动重启完成升级（不依赖 GitHub API）
+- **自动检查更新**：可选 关闭 / 6 小时 / 每天 / 每周，结果与版本号缓存到本地
 
 ## 换算规则
 
@@ -176,6 +177,17 @@ powershell -ExecutionPolicy Bypass -File tools\build-portable.ps1
 产物在 `dist\QuotaChecker-portable-win-x64-v<版本>.zip`，压缩包名自动带上版本；
 解压后的目录名保持 `QuotaChecker-portable-win-x64` 不变，方便覆盖升级。
 
+发布 Release 时**务必**同时上传清单（客户端靠它免 API 检查更新）：
+
+```powershell
+powershell -ExecutionPolicy Bypass -File tools\make-update-manifest.ps1 `
+    -ZipPath dist\QuotaChecker-portable-win-x64-v1.5.0.zip `
+    -NotesFile notes.md `
+    -OutFile dist\update.json
+```
+
+然后把 `QuotaChecker-portable-win-x64-v1.5.0.zip` 与 `update.json` 一起上传到该 Release。
+
 外层启动器说明：`.lnk` 快捷方式保存的目标会被 Windows 转成本机绝对路径，
 压缩包解压到别的目录后必然失效，所以外层放的是一个 **20KB 的原生启动器 exe**
 （Windows 自带的 csc 编译，目标机器无需任何运行时），它按自身所在目录启动
@@ -210,15 +222,22 @@ publish 时仍会看到一条 `IL2026: Built-in COM support is not trim compatib
 
 设置菜单（齿轮）→「检查更新」：
 
-1. 程序请求 GitHub Releases 最新版本并与当前版本比较（匿名 API，每 IP 每小时 60 次限额）
-2. 有新版本时显示更新说明与附件大小，确认后下载（带进度）
-3. 点「重启并更新」：程序退出 → 更新器替换 `app\` 目录 → 自动重启
+1. **不使用 GitHub API**（无 60 次/小时限制）：直接请求
+   `https://github.com/.../releases/latest/download/update.json`，
+   GitHub 会 302 到最新 Release 的该附件，属于普通网页下载。
+   旧版本没有该附件时会退化为探测 `/releases/latest` 的重定向拿 tag。
+2. 有新版本时显示更新说明与附件大小，确认后下载（带进度、可选 SHA256 校验）
+3. 点「重启并更新」：程序退出 → 更新器替换 `app\` → 自动重启
 
-- **密钥配置存放在 `%LOCALAPPDATA%\QuotaChecker\`，更新不影响**
-- 只支持 win-x64 便携版布局（`app\` 上级目录结构）；开发构建会提示手动下载
-- 更新器是更新时临时编译的几 KB 原生程序（Windows 自带 csc），全程无黑框
-- 下载内置断流看门狗：超过 120 秒没有数据会报错而不是永远等待
-- GitHub 匿名 API 有限额，若提示 rate limit exceeded 请稍后再试
+缓存与间隔：
+
+- 「自动检查更新」可选 关闭 / 每 6 小时 / 每天（默认）/ 每周，写入 `keys.json`
+- 每次检查结果（版本号、说明、下载地址、SHA256、检查时间）都会缓存，
+  过期前打开对话框直接读缓存，不再联网；「重新检查」可强制刷新
+- 支持「跳过此版本」，出现更高版本时才会再次提示
+- 更新失败会在安装目录写 `update-result.txt` 便于排查；启动时清理残留暂存目录
+
+**密钥与设置存在 `%LOCALAPPDATA%\QuotaChecker\`，更新过程完全不受影响。**
 
 ## 数据存放位置
 
@@ -238,6 +257,7 @@ packaging/                        便携版的根目录素材（启动器、说�
 └─ 使用说明.txt
 tools/
 ├─ build-portable.ps1             一键出便携版压缩包
+├─ make-update-manifest.ps1       生成 update.json（免 API 更新清单）
 ├─ make-launcher.ps1              生成外层「启动 QuotaChecker.exe」启动器
 └─ make-icon.ps1                  生成 app.ico（蓝色圆角块 + 白色 ¥）
 src/QuotaChecker/

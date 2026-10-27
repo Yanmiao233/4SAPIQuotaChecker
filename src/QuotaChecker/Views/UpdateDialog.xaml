@@ -1,4 +1,4 @@
-﻿<?xml version="1.0" encoding="utf-8"?>
+<?xml version="1.0" encoding="utf-8"?>
 <ContentDialog
     x:Class="QuotaChecker.Views.UpdateDialog"
     xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
@@ -8,13 +8,13 @@
     CloseButtonText="取消"
     DefaultButton="Primary">
 
-    <StackPanel Width="440" Spacing="12">
+    <StackPanel Width="460" Spacing="12">
         <InfoBar x:Name="ErrorBar" Severity="Error" IsClosable="False" IsOpen="False" />
 
-        <TextBlock x:Name="StatusText" Text="正在检查更新…" TextWrapping="Wrap" />
+        <TextBlock x:Name="StatusText" Text="正在获取版本信息…" TextWrapping="Wrap" />
 
         <!-- 新版本信息 -->
-        <ScrollViewer x:Name="NotesViewer" MaxHeight="240" VerticalScrollBarVisibility="Auto"
+        <ScrollViewer x:Name="NotesViewer" MaxHeight="220" VerticalScrollBarVisibility="Auto"
                       Visibility="Collapsed">
             <TextBlock x:Name="NotesText" TextWrapping="Wrap" FontSize="13"
                        IsTextSelectionEnabled="True" />
@@ -25,6 +25,16 @@
             <ProgressBar x:Name="DownloadBar" Maximum="100" />
             <TextBlock x:Name="ProgressText" FontSize="12"
                        Foreground="{ThemeResource TextFillColorSecondaryBrush}" />
+        </StackPanel>
+
+        <!-- 次要操作 -->
+        <StackPanel Orientation="Horizontal" Spacing="12">
+            <HyperlinkButton x:Name="RecheckLink" Content="重新检查" Click="OnRecheckClick"
+                             AutomationProperties.Name="重新检查" />
+            <HyperlinkButton x:Name="SkipLink" Content="跳过此版本" Click="OnSkipClick"
+                             Visibility="Collapsed" AutomationProperties.Name="跳过此版本" />
+            <HyperlinkButton x:Name="PageLink" Content="打开发布页面" Click="OnOpenPageClick"
+                             Visibility="Collapsed" AutomationProperties.Name="打开发布页面" />
         </StackPanel>
     </StackPanel>
 </ContentDialog>

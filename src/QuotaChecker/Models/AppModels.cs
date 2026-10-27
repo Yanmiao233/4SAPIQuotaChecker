@@ -35,6 +35,35 @@ public sealed class AppSettings
 
     /// <summary>自动刷新间隔（秒）；0 表示关闭。</summary>
     public static int AutoRefreshSeconds { get; set; }
+
+    /// <summary>默认自动检查更新间隔（分钟）= 每天。</summary>
+    public const int DefaultUpdateCheckMinutes = 1440;
+}
+
+/// <summary>已缓存的更新信息（避免每次都联网检查）。</summary>
+public sealed class CachedUpdate
+{
+    /// <summary>最新版本号，例如 1.4.0（不含 v）。</summary>
+    public string Version { get; set; } = string.Empty;
+
+    public string Notes { get; set; } = string.Empty;
+
+    /// <summary>zip 附件的绝对下载地址。</summary>
+    public string AssetUrl { get; set; } = string.Empty;
+
+    public long AssetBytes { get; set; }
+
+    /// <summary>附件 SHA256（可为空，为空则跳过校验）。</summary>
+    public string Sha256 { get; set; } = string.Empty;
+
+    /// <summary>Release 网页地址，便于手动下载。</summary>
+    public string PageUrl { get; set; } = string.Empty;
+
+    /// <summary>缓存时间（UTC）。</summary>
+    public DateTimeOffset CheckedAt { get; set; }
+
+    [JsonIgnore]
+    public bool HasValue => Version.Length > 0;
 }
 
 /// <summary>本地数据文件结构。</summary>
@@ -48,6 +77,18 @@ public sealed class AppDataFile
 
     /// <summary>自动刷新间隔（秒）；0 表示关闭。</summary>
     public int AutoRefreshSeconds { get; set; }
+
+    /// <summary>自动检查更新间隔（分钟）；0 表示关闭自动检查。</summary>
+    public int UpdateCheckIntervalMinutes { get; set; } = AppSettings.DefaultUpdateCheckMinutes;
+
+    /// <summary>上次成功检查更新的时间（UTC）。</summary>
+    public DateTimeOffset? LastUpdateCheckUtc { get; set; }
+
+    /// <summary>缓存的更新信息。</summary>
+    public CachedUpdate? CachedUpdate { get; set; }
+
+    /// <summary>用户选择「跳过此版本」的版本号。</summary>
+    public string SkippedVersion { get; set; } = string.Empty;
 
     public List<StoredKey> Keys { get; set; } = new();
 

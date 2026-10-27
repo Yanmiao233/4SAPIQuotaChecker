@@ -43,6 +43,7 @@ public partial class App : Application
         _window.Activate();
 
         ViewModel.StartBackgroundRefresh();
+        _ = ViewModel.MaybeAutoCheckUpdateAsync();
     }
 
     /// <summary>更新器已接管，退出主程序（更新器会等本进程退出后替换文件并重启）。</summary>

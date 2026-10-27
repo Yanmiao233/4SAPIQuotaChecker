@@ -118,18 +118,34 @@
                                         <ComboBoxItem Content="60 分钟" Tag="3600" />
                                     </ComboBox>
 
+                                    <ComboBox x:Name="UpdateCheckBox" Header="自动检查更新"
+                                              HorizontalAlignment="Stretch"
+                                              SelectionChanged="OnUpdateCheckChanged">
+                                        <ComboBoxItem Content="关闭" Tag="0" />
+                                        <ComboBoxItem Content="每 6 小时" Tag="360" />
+                                        <ComboBoxItem Content="每天" Tag="1440" />
+                                        <ComboBoxItem Content="每周" Tag="10080" />
+                                    </ComboBox>
+
                                     <Grid ColumnSpacing="8">
                                         <Grid.ColumnDefinitions>
                                             <ColumnDefinition Width="*" />
                                             <ColumnDefinition Width="Auto" />
                                         </Grid.ColumnDefinitions>
-                                        <TextBlock Grid.Column="0" VerticalAlignment="Center"
-                                                   Style="{ThemeResource CaptionTextBlockStyle}"
-                                                   Foreground="{ThemeResource TextFillColorSecondaryBrush}">
-                                            <Run Text="当前版本 v" />
-                                            <Run x:Name="VersionRun" />
-                                        </TextBlock>
+                                        <StackPanel Grid.Column="0" Spacing="2">
+                                            <TextBlock VerticalAlignment="Center"
+                                                       Style="{ThemeResource CaptionTextBlockStyle}"
+                                                       Foreground="{ThemeResource TextFillColorSecondaryBrush}">
+                                                <Run Text="当前版本 v" />
+                                                <Run x:Name="VersionRun" />
+                                            </TextBlock>
+                                            <TextBlock Text="{x:Bind Vm.UpdateStatusText, Mode=OneWay}"
+                                                       Style="{ThemeResource CaptionTextBlockStyle}"
+                                                       Foreground="{ThemeResource TextFillColorSecondaryBrush}"
+                                                       TextWrapping="Wrap" />
+                                        </StackPanel>
                                         <Button Grid.Column="1" Content="检查更新" Click="OnCheckUpdateClick"
+                                                VerticalAlignment="Center"
                                                 AutomationProperties.Name="检查更新" />
                                     </Grid>
 

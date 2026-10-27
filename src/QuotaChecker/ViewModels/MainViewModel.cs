@@ -15,6 +15,8 @@ public sealed partial class MainViewModel : ObservableObject
 {
     private readonly KeyStore _store;
     private readonly QuotaClient _client;
+    private readonly UpdateService _updateService = new();
+    private readonly UpdateState _updateState = new();
     private bool _isUpdatingDerived;
     private DispatcherQueueTimer? _autoRefreshTimer;
 
@@ -36,6 +38,14 @@ public sealed partial class MainViewModel : ObservableObject
     /// <summary>自动刷新间隔（秒）；0 表示关闭。</summary>
     [ObservableProperty]
     private int _autoRefreshSeconds;
+
+    /// <summary>自动检查更新间隔（分钟）；0 表示关闭自动检查。</summary>
+    [ObservableProperty]
+    private int _updateCheckIntervalMinutes = AppSettings.DefaultUpdateCheckMinutes;
+
+    /// <summary>设置菜单里显示的更新状态文案。</summary>
+    [ObservableProperty]
+    private string _updateStatusText = string.Empty;
 
     [ObservableProperty]
     private string _statusMessage = string.Empty;
@@ -77,6 +87,14 @@ public sealed partial class MainViewModel : ObservableObject
         AppSettings.AutoRefreshSeconds = Math.Max(0, data.AutoRefreshSeconds);
         RateCnyPerUsd = AppSettings.RateCnyPerUsd;
         AutoRefreshSeconds = AppSettings.AutoRefreshSeconds;
+
+        _updateState.Load(
+            data.UpdateCheckIntervalMinutes,
+            data.LastUpdateCheckUtc,
+            data.CachedUpdate,
+            data.SkippedVersion);
+        UpdateCheckIntervalMinutes = _updateState.CheckIntervalMinutes;
+        RefreshUpdateStatusText();
 
         Keys.Clear();
         foreach (var key in data.Keys)
@@ -193,7 +211,105 @@ public sealed partial class MainViewModel : ObservableObject
             : $"已开启自动刷新：每 {FormatInterval(AutoRefreshSeconds)}刷新一次。";
     }
 
-    /// <summary>按当前间隔启动（或停止）自动刷新定时器。必须在 UI 线程调用。</summary>
+    // ---------------- 更新相关 ----------------
+
+/// <summary>缓存的更新信息（可能为 null）。</summary>
+public CachedUpdate? CachedUpdate => _updateState.Cache;
+
+/// <summary>是否存在用户未跳过的可用新版本。</summary>
+public bool HasPendingUpdate => _updateState.HasPendingUpdate;
+
+/// <summary>刷新设置菜单里的更新状态文案。</summary>
+public void RefreshUpdateStatusText()
+{
+    UpdateStatusText = _updateState.BuildStatusText();
+}
+
+/// <summary>套用自动检查更新间隔（分钟，0 = 关闭）并持久化。</summary>
+public void ApplyUpdateCheckInterval(int minutes)
+{
+    _updateState.ApplyInterval(minutes);
+    UpdateCheckIntervalMinutes = _updateState.CheckIntervalMinutes;
+    Persist();
+    RefreshUpdateStatusText();
+
+    StatusMessage = UpdateCheckIntervalMinutes <= 0
+        ? "已关闭自动检查更新。"
+        : $"自动检查更新：每 {FormatMinutes(UpdateCheckIntervalMinutes)}一次。";
+
+    if (UpdateCheckIntervalMinutes > 0)
+    {
+        _ = MaybeAutoCheckUpdateAsync();
+    }
+}
+
+/// <summary>
+/// 获取最新版本信息。<paramref name="force"/> 为 false 且缓存未过期时直接用缓存，
+/// 避免重复联网。返回 null 表示已是最新（或缓存显示已是最新）。
+/// </summary>
+public async Task<UpdateInfo?> CheckForUpdatesAsync(bool force, CancellationToken cancellationToken = default)
+{
+    if (!force && !_updateState.IsCacheStale())
+    {
+        var cachedInfo = _updateState.ToCachedInfo();
+        if (cachedInfo is not null)
+        {
+            return UpdateService.IsNewer(cachedInfo.Tag, UpdateService.CurrentVersion) ? cachedInfo : null;
+        }
+    }
+
+    var info = await _updateService.CheckLatestAsync(cancellationToken).ConfigureAwait(true);
+
+    _updateState.ApplyResult(info);
+    Persist();
+    RefreshUpdateStatusText();
+    return info;
+}
+
+/// <summary>用户选择跳过某版本（不再提示，直到出现更高版本）。</summary>
+public void SkipVersion(string version)
+{
+    _updateState.Skip(version);
+    Persist();
+    RefreshUpdateStatusText();
+
+    StatusMessage = _updateState.SkippedVersion.Length == 0
+        ? "已取消跳过。"
+        : $"已跳过 v{_updateState.SkippedVersion}，出现更高版本时会再次提示。";
+}
+
+/// <summary>启动后按设置的间隔静默检查一次（不打扰用户）。</summary>
+public async Task MaybeAutoCheckUpdateAsync()
+{
+    if (_updateState.CheckIntervalMinutes <= 0 || !_updateState.IsCacheStale())
+    {
+        return;
+    }
+
+    try
+    {
+        await CheckForUpdatesAsync(force: true).ConfigureAwait(true);
+        if (HasPendingUpdate)
+        {
+            StatusMessage = $"发现新版本 v{_updateState.PendingVersion}，可在「设置 → 检查更新」中升级。";
+        }
+    }
+    catch (Exception ex)
+    {
+        UpdateStatusText = "更新检查失败（可手动重试）";
+        StatusMessage = "自动检查更新失败：" + ex.Message;
+    }
+}
+
+/// <summary>把分钟数说成人话。</summary>
+public static string FormatMinutes(int minutes) => minutes switch
+{
+    <= 0 => "关闭",
+    < 60 => $"{minutes} 分钟",
+    _ when minutes % 60 == 0 => $"{minutes / 60} 小时",
+    _ => $"{minutes / 60} 小时 {minutes % 60} 分钟",
+};
+/// <summary>按当前间隔启动（或停止）自动刷新定时器。必须在 UI 线程调用。</summary>
     public void StartAutoRefreshTimer()
     {
         var queue = DispatcherQueue.GetForCurrentThread();
@@ -252,6 +368,10 @@ public sealed partial class MainViewModel : ObservableObject
             RateCnyPerUsd = AppSettings.RateCnyPerUsd,
             QuotaPerUsd = AppSettings.QuotaPerUsd,
             AutoRefreshSeconds = AppSettings.AutoRefreshSeconds,
+            UpdateCheckIntervalMinutes = _updateState.CheckIntervalMinutes,
+            LastUpdateCheckUtc = _updateState.LastCheckUtc,
+            CachedUpdate = _updateState.Cache,
+            SkippedVersion = _updateState.SkippedVersion,
             Keys = Keys.Select(k => k.ToStoredKey()).ToList(),
         };
 

@@ -41,23 +41,58 @@ public sealed partial class MainPage : UserControl
 
         _suppressAutoRefreshEvent = false;
 
+        _suppressUpdateCheckEvent = true;
+        if (!TrySelectInCombo(UpdateCheckBox, Vm.UpdateCheckIntervalMinutes))
+        {
+            UpdateCheckBox.Items.Add(new ComboBoxItem
+            {
+                Content = $"每 {MainViewModel.FormatMinutes(Vm.UpdateCheckIntervalMinutes)}",
+                Tag = Vm.UpdateCheckIntervalMinutes.ToString(System.Globalization.CultureInfo.InvariantCulture),
+            });
+            UpdateCheckBox.SelectedIndex = UpdateCheckBox.Items.Count - 1;
+        }
+
+        _suppressUpdateCheckEvent = false;
+
         VersionRun.Text = UpdateService.CurrentVersion;
+        Vm.RefreshUpdateStatusText();
     }
 
-    private bool TrySelectPreset(int seconds)
+    private bool _suppressUpdateCheckEvent;
+
+    private void OnUpdateCheckChanged(object sender, SelectionChangedEventArgs e)
     {
-        for (var i = 0; i < AutoRefreshBox.Items.Count; i++)
+        if (_suppressUpdateCheckEvent)
         {
-            if (AutoRefreshBox.Items[i] is ComboBoxItem item &&
-                int.TryParse(item.Tag as string, out var value) &&
-                value == seconds)
+            return;
+        }
+
+        if (UpdateCheckBox.SelectedItem is ComboBoxItem item &&
+            int.TryParse(item.Tag as string, out var minutes))
+        {
+            Vm.ApplyUpdateCheckInterval(minutes);
+        }
+    }
+
+    private static bool TrySelectInCombo(ComboBox combo, int value)
+    {
+        for (var i = 0; i < combo.Items.Count; i++)
+        {
+            if (combo.Items[i] is ComboBoxItem item &&
+                int.TryParse(item.Tag as string, out var tag) &&
+                tag == value)
             {
-                AutoRefreshBox.SelectedIndex = i;
+                combo.SelectedIndex = i;
                 return true;
             }
         }
 
         return false;
+    }
+
+    private bool TrySelectPreset(int seconds)
+    {
+        return TrySelectInCombo(AutoRefreshBox, seconds);
     }
 
     private void OnAutoRefreshChanged(object sender, SelectionChangedEventArgs e)
@@ -85,7 +120,7 @@ public sealed partial class MainPage : UserControl
             flyoutOwner?.Flyout?.Hide();
         }
 
-        _ = new UpdateDialog(RootGrid.XamlRoot).ShowAsync();
+        _ = new UpdateDialog(RootGrid.XamlRoot, Vm).ShowAsync();
     }
 
     private static Button? FindAncestorButton(FrameworkElement element)
