@@ -154,7 +154,9 @@ public sealed partial class MainViewModel : ObservableObject
 
         StatusMessage = LastSaveError.Length > 0
             ? $"密钥已添加，但保存失败：{LastSaveError}"
-            : $"已添加「{vm.Name}」，正在查询额度…";
+            : RelocationNotice.Length > 0
+                ? $"已添加「{vm.Name}」。{RelocationNotice}"
+                : $"已添加「{vm.Name}」，正在查询额度…";
 
         await vm.RefreshCoreAsync().ConfigureAwait(true);
         UpdateDerived();
@@ -411,13 +413,35 @@ public static string FormatMinutes(int minutes) => minutes switch
         }
         catch (Exception ex)
         {
+            // 主位置不可写时自动换到可写位置再试一次（企业策略/受控文件夹访问常见）
+            if (_store.TryRelocate(out var newPath))
+            {
+                try
+                {
+                    _store.Save(data);
+                    LastSaveError = string.Empty;
+                    DataFilePath = newPath;
+                    RelocationNotice = $"原位置无法写入，数据已改存到：{newPath}";
+                    StatusMessage = RelocationNotice;
+                    return;
+                }
+                catch (Exception retryEx)
+                {
+                    ex = retryEx;
+                }
+            }
+
             LastSaveError = ex.Message;
-            StatusMessage = "本地数据保存失败：" + ex.Message;
+            StatusMessage = "本地数据保存失败：" + ex.Message + Environment.NewLine +
+                            "可在「设置」里查看数据目录，或手动指定可写位置。";
         }
     }
 
     /// <summary>最近一次保存失败的原因（空表示正常）。</summary>
     public string LastSaveError { get; private set; } = string.Empty;
+
+    /// <summary>因原位置不可写而改存到新位置时的提示（空表示未发生）。</summary>
+    public string RelocationNotice { get; private set; } = string.Empty;
 
     /// <summary>解除「读取失败时禁止写盘」状态并立即保存。</summary>
     public void AllowSaveAfterLoadFailure()

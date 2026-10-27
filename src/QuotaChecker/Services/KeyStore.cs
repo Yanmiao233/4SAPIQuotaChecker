@@ -56,21 +56,165 @@ public sealed class KeyStore
         Encoder = JavaScriptEncoder.UnsafeRelaxedJsonEscaping,
     });
 
-    private readonly string _filePath;
+    private string _filePath;
 
     public KeyStore(string? filePath = null)
     {
-        _filePath = filePath ?? Path.Combine(
-            Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
-            "QuotaChecker",
-            "keys.json");
+        _filePath = filePath ?? ResolveDefaultPath();
     }
 
     public string FilePath => _filePath;
 
     public string BackupPath => _filePath + ".bak";
 
+    /// <summary>
+    /// 候选数据文件位置（按优先级）。%LOCALAPPDATA% 在部分环境不可写
+    /// （企业策略、受控文件夹访问、配置文件目录异常等），因此需要降级方案。
+    /// </summary>
+    private static string[] BuildCandidates()
+    {
+        var list = new List<string>();
+
+        void AddFile(string? directory)
+        {
+            if (string.IsNullOrWhiteSpace(directory))
+            {
+                return;
+            }
+
+            try
+            {
+                list.Add(Path.Combine(directory, "keys.json"));
+            }
+            catch (ArgumentException)
+            {
+                // 非法路径直接跳过
+            }
+        }
+
+        void AddUnder(string? baseDir)
+        {
+            if (string.IsNullOrWhiteSpace(baseDir))
+            {
+                return;
+            }
+
+            AddFile(Path.Combine(baseDir, "QuotaChecker"));
+        }
+
+        AddUnder(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData));
+        AddUnder(Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData));
+
+        // 便携位置：程序根目录（app\ 的上一级）下的 data\
+        var installRoot = DetectPortableRoot();
+        if (installRoot is not null)
+        {
+            AddFile(Path.Combine(installRoot, "data"));
+        }
+
+        AddUnder(Path.GetTempPath());
+
+        return list.Distinct(StringComparer.OrdinalIgnoreCase).ToArray();
+    }
+
     public string DirectoryPath => Path.GetDirectoryName(_filePath) ?? Environment.CurrentDirectory;
+
+    private static string? DetectPortableRoot()
+    {
+        var baseDir = AppContext.BaseDirectory.TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar);
+        if (!Path.GetFileName(baseDir).Equals("app", StringComparison.OrdinalIgnoreCase))
+        {
+            return null;
+        }
+
+        return Directory.GetParent(baseDir)?.FullName;
+    }
+
+    /// <summary>
+    /// 选定数据文件位置：
+    /// 1. 已有 keys.json 且所在目录可写的位置（保证既能读到也能保存）
+    /// 2. 退而求其次：已有 keys.json 但不可写（至少能读，保存时会触发迁移）
+    /// 3. 都没有时，选第一个可写位置
+    /// </summary>
+    public static string ResolveDefaultPath(IReadOnlyList<string>? candidates = null)
+    {
+        var list = candidates ?? BuildCandidates();
+        var existing = list.Where(File.Exists).ToList();
+
+        foreach (var path in existing)
+        {
+            if (IsDirectoryWritable(Path.GetDirectoryName(path)))
+            {
+                return path;
+            }
+        }
+
+        if (existing.Count > 0)
+        {
+            return existing[0];
+        }
+
+        foreach (var path in list)
+        {
+            if (IsDirectoryWritable(Path.GetDirectoryName(path)))
+            {
+                return path;
+            }
+        }
+
+        return list[0];
+    }
+
+    /// <summary>尝试换到另一个可写位置；成功返回 true 并返回新路径。</summary>
+    public bool TryRelocate(out string newPath, IReadOnlyList<string>? candidates = null)
+    {
+        newPath = _filePath;
+        foreach (var path in candidates ?? BuildCandidates())
+        {
+            if (string.Equals(path, _filePath, StringComparison.OrdinalIgnoreCase))
+            {
+                continue;
+            }
+
+            if (!IsDirectoryWritable(Path.GetDirectoryName(path)))
+            {
+                continue;
+            }
+
+            // 目标已有数据时不覆盖
+            if (File.Exists(path))
+            {
+                continue;
+            }
+
+            _filePath = path;
+            newPath = path;
+            return true;
+        }
+
+        return false;
+    }
+
+    private static bool IsDirectoryWritable(string? directory)
+    {
+        if (string.IsNullOrWhiteSpace(directory))
+        {
+            return false;
+        }
+
+        try
+        {
+            Directory.CreateDirectory(directory);
+            var probe = Path.Combine(directory, ".write-probe-" + Guid.NewGuid().ToString("N")[..8]);
+            File.WriteAllText(probe, "x");
+            File.Delete(probe);
+            return true;
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or NotSupportedException or ArgumentException)
+        {
+            return false;
+        }
+    }
 
     public LoadResult Load()
     {

@@ -38,6 +38,8 @@ QuotaChecker-portable-win-x64\
 
 ## 数据存储
 
+默认位置：
+
 ```
 %LOCALAPPDATA%\QuotaChecker\
 ├── keys.json          密钥与设置（API Key 为 DPAPI 密文）
@@ -45,9 +47,16 @@ QuotaChecker-portable-win-x64\
 └── crash.log          未处理异常记录
 ```
 
+`%LOCALAPPDATA%` 不可写时，按顺序自动降级到：
+
+1. `%APPDATA%\QuotaChecker\`
+2. 程序目录下 `data\`（便携）
+3. `%TEMP%\QuotaChecker\`
+
+- 优先使用「已有数据且可写」的目录
 - 损坏的文件隔离为 `keys.json.corrupt-<时间戳>`，不直接覆盖
 - 主文件无法解析时自动从 `.bak` 恢复
-- 保存失败在界面提示，不静默丢弃
+- 保存失败在界面提示并显示新位置，不静默丢弃
 
 ## 接口
 

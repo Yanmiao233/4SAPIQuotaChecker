@@ -347,7 +347,7 @@
                 </Grid.ColumnDefinitions>
                 <TextBlock Grid.Column="0" Text="{x:Bind Vm.StatusMessage, Mode=OneWay}" VerticalAlignment="Center"
                            TextTrimming="CharacterEllipsis" Style="{ThemeResource CaptionTextBlockStyle}" />
-                <TextBlock Grid.Column="1" Text="{x:Bind Vm.DataFilePath}" VerticalAlignment="Center"
+                <TextBlock Grid.Column="1" Text="{x:Bind Vm.DataFilePath, Mode=OneWay}" VerticalAlignment="Center"
                            Foreground="{ThemeResource TextFillColorSecondaryBrush}"
                            Style="{ThemeResource CaptionTextBlockStyle}" TextTrimming="CharacterEllipsis"
                            ToolTipService.ToolTip="密钥数据保存位置（DPAPI 加密）" />
