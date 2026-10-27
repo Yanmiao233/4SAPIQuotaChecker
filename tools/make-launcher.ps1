@@ -1,4 +1,4 @@
-﻿# 生成外层启动器 启动 QuotaChecker.exe
+﻿# 生成外层启动器 QuotaChecker.exe（放在包根目录，启动 app\QuotaChecker.exe）
 #
 # 为什么不是 .lnk：IShellLink 保存时会把目标转成本机绝对路径（PIDL），
 # 相对路径不会被持久化——压缩包解压到别的目录/别的机器后快捷方式必然失效。
@@ -77,7 +77,7 @@ internal static class Launcher
 $srcFile = Join-Path $env:TEMP "qc-launcher-$([guid]::NewGuid().ToString('N').Substring(0,8)).cs"
 Set-Content -Path $srcFile -Value $source -Encoding UTF8
 
-$outExe = Join-Path $root '启动 QuotaChecker.exe'
+$outExe = Join-Path $root 'QuotaChecker.exe'
 $args = @(
     '/nologo', '/target:winexe', '/platform:anycpu', '/optimize+',
     '/r:System.dll', '/r:System.Core.dll', '/r:System.Windows.Forms.dll',

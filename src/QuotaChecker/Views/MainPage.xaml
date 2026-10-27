@@ -102,7 +102,7 @@
 
                                     <NumberBox Header="站点倍率（官方 1 美元 = ？元）"
                                                Value="{x:Bind Vm.RateCnyPerUsd, Mode=TwoWay}"
-                                               SpinButtonPlacementMode="Compact"
+                                               SpinButtonPlacementMode="Hidden"
                                                SmallChange="0.1" LargeChange="1" Minimum="0.0001"
                                                HorizontalAlignment="Stretch"
                                                ValueChanged="OnRateChanged" />

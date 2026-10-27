@@ -1,4 +1,4 @@
-﻿# 配额统计 QuotaChecker
+# 配额统计 QuotaChecker
 
 WinUI 3 风格的 Windows 桌面程序：添加多个 API 密钥，自动查询每个密钥的 **quota 消耗**，换算成**人民币金额**，并汇总全部密钥的总消耗。
 
@@ -10,13 +10,13 @@ WinUI 3 风格的 Windows 桌面程序：添加多个 API 密钥，自动查询�
 
 不想自行编译的话，到 [Releases](https://github.com/Yanmiao233/4SAPIQuotaChecker/releases) 下载
 `QuotaChecker-portable-win-x64-v<版本>.zip`（约 31 MB），解压后双击根目录的
-`启动 QuotaChecker.exe` 即可。
+`QuotaChecker.exe` 即可。
 
 解压后根目录只有 3 项，程序文件都收在 `app\` 子目录里：
 
 ```
 QuotaChecker-portable-win-x64\
-├── 启动 QuotaChecker.exe      双击这个启动（几 KB 的原生启动器）
+├── QuotaChecker.exe           双击这个启动（几 KB 的原生启动器）
 ├── 使用说明.txt
 └── app\                       程序本体
 ```
@@ -253,12 +253,12 @@ publish 时仍会看到一条 `IL2026: Built-in COM support is not trim compatib
 ```
 QuotaChecker.sln
 packaging/                        便携版的根目录素材（启动器、说明）
-├─ 启动 QuotaChecker.cmd
+├─ QuotaChecker.exe              包根目录的启动器
 └─ 使用说明.txt
 tools/
 ├─ build-portable.ps1             一键出便携版压缩包
 ├─ make-update-manifest.ps1       生成 update.json（免 API 更新清单）
-├─ make-launcher.ps1              生成外层「启动 QuotaChecker.exe」启动器
+├─ make-launcher.ps1              生成外层 QuotaChecker.exe 启动器
 └─ make-icon.ps1                  生成 app.ico（蓝色圆角块 + 白色 ¥）
 src/QuotaChecker/
 ├─ app.ico                        程序图标（9 种尺寸）

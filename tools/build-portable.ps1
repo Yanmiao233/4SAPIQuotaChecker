@@ -107,7 +107,7 @@ Copy-Item (Join-Path $packaging '*') $rootDir -Recurse -Force
 $launcherScript = Join-Path $repoRoot 'tools\make-launcher.ps1'
 & $launcherScript -BaseDir $rootDir -IcoPath (Join-Path $repoRoot 'src\QuotaChecker\app.ico') |
     ForEach-Object { Write-Host "    $_" }
-if (-not (Test-Path (Join-Path $rootDir '启动 QuotaChecker.exe'))) {
+if (-not (Test-Path (Join-Path $rootDir 'QuotaChecker.exe'))) {
     throw '生成外层启动器失败'
 }
 
@@ -138,6 +138,6 @@ Write-Host "  压缩后   : $zipMb MB"
 Write-Host "  SHA256   : $sha"
 Write-Host ""
 Write-Host "解压后根目录只有 3 项："
-Write-Host "  启动 QuotaChecker.exe   双击即用（几 KB 的原生启动器，可随包移动）"
+Write-Host "  QuotaChecker.exe        双击即用（几 KB 的原生启动器，可随包移动）"
 Write-Host "  使用说明.txt"
 Write-Host "  app\                    程序文件"

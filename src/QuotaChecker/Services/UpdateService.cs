@@ -448,6 +448,12 @@ try {
     # 4) 根目录文件（启动器 / 说明）
     Get-ChildItem $src -File | Copy-Item -Destination $dst -Force -ErrorAction Stop
 
+    # 4.1) 清理历史遗留的旧启动器名称
+    foreach ($legacy in @('启动 QuotaChecker.exe', '启动 QuotaChecker.cmd', 'QuotaChecker.lnk')) {
+        $old = Join-Path $dst $legacy
+        if (Test-Path $old) { Remove-Item $old -Force -ErrorAction SilentlyContinue }
+    }
+
     # 5) 校验主程序确实被换成新版本
     $newVer = (Get-Item $exe).VersionInfo.FileVersion
     $oldVer = (Get-Item (Join-Path $srcApp 'QuotaChecker.exe')).VersionInfo.FileVersion
