@@ -35,7 +35,8 @@ else {
 $sha = (Get-FileHash -LiteralPath $ZipPath -Algorithm SHA256).Hash
 $notes = ''
 if (-not [string]::IsNullOrWhiteSpace($NotesFile) -and (Test-Path -LiteralPath $NotesFile)) {
-    $notes = Get-Content -LiteralPath $NotesFile -Raw -Encoding UTF8
+    # 用 .NET 读纯字符串：Get-Content -Raw 返回的 PSObject 会被 ConvertTo-Json 包成 {value:...}
+    $notes = [string][System.IO.File]::ReadAllText($NotesFile)
 }
 
 $manifest = [ordered]@{
