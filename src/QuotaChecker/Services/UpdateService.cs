@@ -1,4 +1,4 @@
-﻿using System.Diagnostics;
+using System.Diagnostics;
 using System.IO;
 using System.IO.Compression;
 using System.Net.Http;
@@ -15,7 +15,7 @@ public sealed record UpdateInfo(string Tag, string Notes, string AssetUrl, long 
 /// 便携版自动更新：
 /// 1. 查 GitHub Releases 最新版本并与当前程序集版本比较
 /// 2. 下载附件 zip 并解压到 %TEMP%
-/// 3. 用临时编译的小更新器接管：等主程序退出 -> 替换 app\ -> 重启
+/// 3. 启动一个无窗口的 PowerShell 更新器接管：等主程序退出 -> 替换 app\ -> 重启
 /// </summary>
 public sealed class UpdateService
 {
@@ -24,75 +24,6 @@ public sealed class UpdateService
 
     /// <summary>更新暂存目录前缀（启动时会清理残留）。</summary>
     public const string StagingPrefix = "QuotaChecker-update-";
-
-    private const string UpdaterSource = @"
-using System;
-using System.Diagnostics;
-using System.IO;
-using System.Threading;
-
-static class Updater
-{
-    static int Main(string[] args)
-    {
-        if (args.Length < 4) return 2;
-        int pid = int.Parse(args[0]);
-        string srcRoot = args[1];
-        string dstRoot = args[2];
-        string exe = args[3];
-
-        for (int i = 0; i < 30; i++)
-        {
-            Process p = null;
-            try
-            {
-                p = Process.GetProcessById(pid);
-                if (p.HasExited) { p.Dispose(); break; }
-            }
-            catch (ArgumentException) { break; }
-            finally { if (p != null) p.Dispose(); }
-            Thread.Sleep(1000);
-        }
-        Thread.Sleep(1500);
-
-        try
-        {
-            string dstApp = Path.Combine(dstRoot, ""app"");
-            string srcApp = Path.Combine(srcRoot, ""app"");
-            if (Directory.Exists(dstApp)) DeleteDir(dstApp);
-            CopyDir(srcApp, dstApp);
-            foreach (string f in Directory.GetFiles(srcRoot))
-                File.Copy(f, Path.Combine(dstRoot, Path.GetFileName(f)), true);
-            Process.Start(new ProcessStartInfo
-            {
-                FileName = exe,
-                WorkingDirectory = Path.GetDirectoryName(exe),
-                UseShellExecute = true
-            });
-        }
-        catch { }
-        return 0;
-    }
-
-    static void DeleteDir(string dir)
-    {
-        foreach (string d in Directory.GetDirectories(dir)) DeleteDir(d);
-        foreach (string f in Directory.GetFiles(dir))
-        {
-            try { File.SetAttributes(f, FileAttributes.Normal); } catch { }
-            File.Delete(f);
-        }
-        Directory.Delete(dir, true);
-    }
-
-    static void CopyDir(string a, string b)
-    {
-        Directory.CreateDirectory(b);
-        foreach (string d in Directory.GetDirectories(a)) CopyDir(d, Path.Combine(b, Path.GetFileName(d)));
-        foreach (string f in Directory.GetFiles(a)) File.Copy(f, Path.Combine(b, Path.GetFileName(f)), true);
-    }
-}
-";
 
     private readonly HttpClient _http;
 
@@ -266,77 +197,64 @@ static class Updater
     }
 
     /// <summary>
-    /// 临时编译更新器并启动（args: 主程序 PID / 新包根目录 / 安装根目录 / 重启的 exe），
-    /// 返回后调用方应立即退出主程序；更新器会等退出后替换文件并重启。
+    /// 启动无窗口的 PowerShell 更新器（等主程序退出 -> 替换 app\ 与根目录文件 -> 重启）。
+    /// 调用方随后应退出主程序。-EncodedCommand 传参，没有引号/编码问题。
     /// </summary>
     public static void LaunchUpdater(string stagingRoot, string installRoot)
     {
-        var csc = new[]
-        {
-            Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.Windows), "Microsoft.NET", "Framework64", "v4.0.30319", "csc.exe"),
-            Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.Windows), "Microsoft.NET", "Framework", "v4.0.30319", "csc.exe"),
-        }.FirstOrDefault(File.Exists)
-            ?? throw new InvalidOperationException("找不到系统自带的 csc.exe，无法生成更新器。");
+        var currentPid = Environment.ProcessId;
+        var exePath = Path.Combine(installRoot, "app", "QuotaChecker.exe");
 
-        var updaterExe = Path.Combine(stagingRoot, "updater.exe");
-        var sourceFile = Path.Combine(stagingRoot, "updater.cs");
-        var logFile = Path.Combine(stagingRoot, "csc-log.txt");
-        File.WriteAllText(sourceFile, UpdaterSource, Encoding.UTF8);
+        // 路径以单引号字符串嵌入（PowerShell 里 '' 转义单引号），脚本主体全 ASCII
+        const string scriptTemplate = @"
+$target = '__PID__'
+for ($i = 0; $i -lt 30; $i++) {
+    if (-not (Get-Process -Id $target -ErrorAction SilentlyContinue)) { break }
+    Start-Sleep -Seconds 1
+}
+Start-Sleep -Milliseconds 1500
+$src = '__SRC__'
+$dst = '__DST__'
+$exe = '__EXE__'
+try {
+    Remove-Item (Join-Path $dst 'app') -Recurse -Force -ErrorAction SilentlyContinue
+    Copy-Item (Join-Path $src 'app') (Join-Path $dst 'app') -Recurse -Force
+    Get-ChildItem $src -File | Copy-Item -Destination $dst -Force -ErrorAction SilentlyContinue
+    Start-Process -FilePath $exe -WorkingDirectory (Join-Path $dst 'app')
+} catch {
+    Start-Process -FilePath $exe -WorkingDirectory (Join-Path $dst 'app')
+}
+";
+        var script = scriptTemplate
+            .Replace("__PID__", currentPid.ToString(System.Globalization.CultureInfo.InvariantCulture))
+            .Replace("__SRC__", stagingRoot.Replace("'", "''"))
+            .Replace("__DST__", installRoot.Replace("'", "''"))
+            .Replace("__EXE__", exePath.Replace("'", "''"));
+
+        var encoded = Convert.ToBase64String(Encoding.Unicode.GetBytes(script));
 
         var psi = new ProcessStartInfo
         {
-            FileName = csc,
+            FileName = Path.Combine(
+                Environment.GetFolderPath(Environment.SpecialFolder.System),
+                "WindowsPowerShell", "v1.0", "powershell.exe"),
             UseShellExecute = false,
             CreateNoWindow = true,
-            RedirectStandardError = true,
-            RedirectStandardOutput = true,
-            StandardErrorEncoding = Encoding.UTF8,
-            StandardOutputEncoding = Encoding.UTF8,
         };
-        psi.ArgumentList.Add("/nologo");
-        psi.ArgumentList.Add("/target:winexe");
-        psi.ArgumentList.Add("/optimize+");
-        // 显式引用：不依赖 csc.rsp 默认集（部分环境下不生效，报 CS0246 找不到 Process）
-        psi.ArgumentList.Add("/r:System.dll");
-        psi.ArgumentList.Add("/r:System.Core.dll");
-        psi.ArgumentList.Add($"/out:{updaterExe}");
-        psi.ArgumentList.Add(sourceFile);
+        psi.ArgumentList.Add("-NoProfile");
+        psi.ArgumentList.Add("-NonInteractive");
+        psi.ArgumentList.Add("-ExecutionPolicy");
+        psi.ArgumentList.Add("Bypass");
+        psi.ArgumentList.Add("-EncodedCommand");
+        psi.ArgumentList.Add(encoded);
 
-        string output;
-        using (var compile = Process.Start(psi) ?? throw new InvalidOperationException("无法启动 csc.exe。"))
-        {
-            output = compile.StandardOutput.ReadToEnd() + compile.StandardError.ReadToEnd();
-            compile.WaitForExit();
-            File.WriteAllText(logFile, output, Encoding.UTF8);
-
-            if (compile.ExitCode != 0 || !File.Exists(updaterExe))
-            {
-                var tail = output.Length > 400 ? output[^400..] : output;
-                throw new InvalidOperationException(
-                    $"更新器编译失败（csc 退出码 {compile.ExitCode}）：{tail}（完整输出在 {logFile}）");
-            }
-        }
-
-        var exePath = Path.Combine(installRoot, "app", "QuotaChecker.exe");
-        var currentPid = Environment.ProcessId;
-
-        var launch = new ProcessStartInfo
-        {
-            FileName = updaterExe,
-            UseShellExecute = false,
-            CreateNoWindow = true,
-            WorkingDirectory = stagingRoot,
-        };
-        launch.ArgumentList.Add(currentPid.ToString(System.Globalization.CultureInfo.InvariantCulture));
-        launch.ArgumentList.Add(stagingRoot);
-        launch.ArgumentList.Add(installRoot);
-        launch.ArgumentList.Add(exePath);
-
-        if (Process.Start(launch) is null)
+        if (Process.Start(psi) is null)
         {
             throw new InvalidOperationException("无法启动更新器。");
         }
     }
+
+    private static string PsQuote(string value) => "'" + value.Replace("'", "''") + "'";
 
     /// <summary>清理上次更新留下的暂存目录。</summary>
     public static void CleanupStaleStaging()
@@ -368,7 +286,6 @@ static class Updater
         }
 
         var value = text.Trim().TrimStart('v', 'V').Split('+', '-', ' ')[0];
-        // 逐段剥离非数字尾巴（例如 1.4.0-beta → 1.4.0）
         var parts = value.Split('.');
         var clean = new List<string>();
         foreach (var part in parts)
@@ -384,6 +301,4 @@ static class Updater
 
         return clean.Count > 0 && Version.TryParse(string.Join('.', clean), out version!);
     }
-
-    private static string Truncate(string text) => text.Length <= 200 ? text : text[..200] + "…";
 }
